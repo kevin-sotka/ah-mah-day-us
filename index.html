@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#06060c">
+<meta name="description" content="Ah Mah Day Us. A mechanism island in four rooms: dials, organ pipes, a water clock, and the hall that makes them sing.">
+<title>Ah Mah Day Us</title>
+<style>
+
+  :root{
+    --brass:#c89b3c; --amber:#f2b880; --indigo:#241b3f;
+    --aqua:#a9d8d4; --verdigris:#4c7d6e;
+    --stage-w:1600; --stage-h:900;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#06060c;overflow:hidden;
+    font-family:"Iowan Old Style",Palatino,Georgia,serif;color:var(--amber);
+    -webkit-font-smoothing:antialiased;touch-action:none;
+    -webkit-tap-highlight-color:transparent}
+  #fit{position:fixed;inset:0;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1600px;height:900px;
+    transform-origin:center center;transform:translate(-50%,-50%) scale(1);
+    overflow:hidden;background:#06060c;box-shadow:0 0 120px #000 inset}
+
+  .layer{position:absolute;inset:0;pointer-events:none}
+  #chamber,#shafts{will-change:transform}
+  .layer img{width:100%;height:100%;object-fit:cover;display:block}
+
+  #chamber{transform:scale(1.06)}
+  /* the near floor band, lifted out of the plate so it can travel faster than the
+     room behind it. Same stone, one plane closer. */
+  /* geometry is exact, not object-fit: the band is the plate's own bottom 33.5%
+     re-laid at 1.06x about the bottom centre, so at rest it sits close to
+     pixel-on-pixel over the plate and only separates when it travels. */
+  /* The near plane is now a wrapper, not a single band. The mount stands ON the near
+     floor, so it has to travel at the floor's rate or its feet slide off the stone,
+     and that is the one relationship this whole layer exists to assert. Wrapping both
+     in one transformed parent keeps the per-frame write count at three: style recalc
+     is the dominant term in the drag cost and it scales with elements touched. */
+  #nearplane{position:absolute;inset:0;pointer-events:none;will-change:transform}
+  #nearfloor{position:absolute;left:-48px;top:580px;width:1696px;height:320px}
+  #nearfloor img{width:100%;height:100%;display:block}
+  /* the machine's frame, and every shadow that frame and the wheel put on the stone,
+     baked into one composited layer. See tools/build_mount.py. */
+  /* The same beams again, in the near air, inside the near plane and BEHIND the mount.
+     Once #shafts went behind the near plane the stone the columns stand on lost every
+     bit of light it had, and a contact shadow with no lit floor around it is just more
+     dark, there is nothing for it to be darker than. This puts the hall's light back on
+     the near stone without ever reaching the front of the iron. It is the same plate, so
+     no new asset, and it is inside the one wrapper that is already transformed, so it
+     costs no extra per-frame write. It is only safe to do this because build_shafts.py
+     made that plate pure light; the old plate would have painted a second church here. */
+  #nearlight{mix-blend-mode:screen;opacity:.30;
+    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 62%,#000 100%);
+    mask-image:linear-gradient(to bottom,transparent 0,#000 62%,#000 100%)}
+  #mount{position:absolute;inset:0}
+  #mount img{width:100%;height:100%;display:block}
+  /* Light pooling on the polished floor under the machine. The baked plate is brightest
+     in its own top row, so laid down raw it put a hard 1100px-wide luminance step across
+     the frame at y=788, 57 to 115 on the meter. That was there in round 2 as well and
+     nobody caught it, because nobody was looking at the floor. Now that the whole
+     question is where brass meets stone, an edge in the contact zone is the last thing
+     the frame can afford. Masked in from the top and pulled back.
+
+     Round 4 moved it INSIDE #nearplane, between the floor and the mount. It is light
+     lying on stone, so the iron standing on that stone has to block it, before this it
+     was a sibling painted after #mount and was screening 16 points of luminance back
+     through the tie bar, which is a large part of why the carpet runner read straight
+     through a solid iron bar. It now also travels with the floor it lies on, which it
+     should always have done, and that is free: #nearplane is still one transform. */
+  #floorglow{position:absolute;left:250px;top:788px;width:1100px;height:260px;
+    pointer-events:none;mix-blend-mode:screen;opacity:.52;
+    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 20%,#000 100%);
+    mask-image:linear-gradient(to bottom,transparent 0,#000 20%,#000 100%)}
+  #floorglow img{width:100%;height:100%;display:block}
+  /* .72 was tuned against the old vault crop, which was almost black. The hall crop
+     carries its own lit floor, and screening the shafts over it at that strength
+     flattened the whole frame into gold haze.
+
+     ROUND 4, the actual cause of three rounds of "the mount is semi-transparent".
+     This layer used to sit AFTER #nearplane in the document, so it screened over the
+     mount. And until round 4 the plate it screened was not light at all: it was a whole
+     photograph of a gothic church, windows and tracery and arcade piers and hanging
+     cables. `screen` is additive, so that building landed at close to full strength on
+     the mount's dark cast iron and was swamped on the bright brass, measured, the left
+     column shaft took 34.7 mean dRGB from this layer against 46.8 from the mount itself.
+     Every symptom three critics described follows from that one fact, including the tell
+     one of them used to rule out glass: "the clamp yokes and the base plates are
+     near-opaque while the shafts and spokes they connect are not." That is not an alpha
+     value, it is a screen blend responding to the surface under it.
+
+     Two changes, both needed. `shafts.webp` is now beams and nothing else
+     (tools/build_shafts.py), and this layer is now behind the near plane, because light
+     hanging in the far hall does not repaint an iron column standing in front of it.
+     The dial was already in front of it; the mount is simply treated the same way now.
+     If anything is ever added between #nearplane and #dial, it must not be a screen or
+     multiply layer carrying image content. */
+  #shafts{mix-blend-mode:screen;opacity:.34;animation:drift 34s ease-in-out infinite alternate}
+  @keyframes drift{
+    from{transform:translate3d(-14px,-6px,0) scale(1.05)}
+    to  {transform:translate3d(14px,8px,0) scale(1.10)}
+  }
+
+  /* Gears sunk into the dark of the room. These used to ring the dial at .20/4px,
+     which was invisible against the old near-black vault and read as four grey
+     smudges hanging in mid-air over the lit hall. They now live only in the two
+     corners that are genuinely in shadow, far enough down in opacity to read as
+     machinery behind the stone rather than as objects in the room. */
+  .depth{position:absolute;pointer-events:none;opacity:.13;filter:blur(9px)}
+  .depth img{width:100%;height:100%;display:block}
+
+  /* ---- the dial ---- */
+  #dial{position:absolute;left:800px;top:480px;width:0;height:0;
+    transform:translateZ(0)}
+  .ring{position:absolute;left:0;top:0;transform-origin:center center;
+    will-change:transform}
+  .ring>img{position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%);width:100%;height:100%;
+    filter:drop-shadow(0 18px 34px rgba(0,0,0,.62))}
+  .ring.lit>img{filter:drop-shadow(0 18px 34px rgba(0,0,0,.62))
+    drop-shadow(0 0 26px rgba(242,184,128,.55))}
+
+  .glyph{position:absolute;left:50%;top:50%;
+    width:var(--gs);height:var(--gs);
+    margin:calc(var(--gs)/-2) 0 0 calc(var(--gs)/-2);
+    display:grid;place-items:center;border-radius:50%;
+    background:radial-gradient(circle at 42% 36%,rgba(46,32,16,.93),rgba(14,9,4,.97));
+    box-shadow:0 0 0 2px rgba(198,154,66,.75),0 3px 9px rgba(0,0,0,.6),
+      0 0 0 3.5px rgba(0,0,0,.45);
+    transition:opacity .3s,filter .3s,box-shadow .4s}
+  .glyph svg{width:66%;height:66%;display:block}
+  .glyph path,.glyph circle,.glyph polygon,.glyph rect,.glyph line{
+    stroke:#d8ab5c;stroke-width:5;fill:none;vector-effect:non-scaling-stroke;
+    stroke-linecap:round;stroke-linejoin:round}
+  .ring.lit .glyph.key{opacity:1;filter:drop-shadow(0 0 14px var(--amber));
+    box-shadow:0 0 0 2px rgba(255,226,170,.95),0 0 22px rgba(242,184,128,.8),
+      0 3px 9px rgba(0,0,0,.6)}
+  .ring.lit .glyph.key path,.ring.lit .glyph.key circle,
+  .ring.lit .glyph.key polygon,.ring.lit .glyph.key rect,
+  .ring.lit .glyph.key line{stroke:#fff0d2}
+
+  /* The wheel's key. The room's light comes hard in from the upper right and rakes
+     down-left across the tile; a cut-out ring photographed in a softbox carries no such
+     key, and that flatness is half of why it read as pasted on. So: a warm highlight on
+     the upper-right of the disc and a matching terminator on the lower-left. Sits above
+     the rings and does not rotate with them, because the light does not rotate. */
+  /* Round 4: this used to be a 600px box clipped with border-radius:50%, and the
+     gradient inside it did NOT reach zero before that clip. `circle at 78% 22%` sizes
+     itself to the farthest corner, 662px away, so at the top of the clip circle the
+     gradient was still carrying light when the disc ended, a hard circular seam at
+     r=300 around the mechanism, which is the pale glass disc the round-3 notes logged as
+     "a faint visible boundary at about r=350". It was faint while the room was hazed
+     over. With the haze gone it is the most obvious edge in the frame, and an edge like
+     that is the same failure as the mount: a layer announcing itself.
+     Now full-stage with an explicit gradient radius, so there is no box edge to clip
+     against and the light simply runs out where it should. */
+  #keylight{position:absolute;inset:0;pointer-events:none}
+  #keylight::before,#keylight::after{content:"";position:absolute;inset:0}
+  #keylight::before{mix-blend-mode:screen;
+    background:radial-gradient(circle 310px at 60.5% 34.7%,rgba(255,230,180,.54) 0%,
+      rgba(255,203,138,.21) 36%,transparent 100%)}
+  #keylight::after{mix-blend-mode:multiply;
+    background:radial-gradient(circle 310px at 39.5% 73.3%,rgba(24,18,42,.62) 0%,
+      rgba(24,18,42,.26) 38%,transparent 100%)}
+
+  /* the notch: the machine states its own goal */
+  #marker{position:absolute;left:800px;top:480px;width:0;height:0;pointer-events:none}
+  #marker .notch{position:absolute;left:-33px;top:-430px;width:66px;height:78px;
+    display:grid;place-items:center;
+    background:linear-gradient(180deg,rgba(20,14,8,.94),rgba(20,14,8,.55));
+    border:2px solid rgba(200,155,60,.85);border-bottom:none;
+    border-radius:9px 9px 0 0;
+    box-shadow:0 0 26px rgba(242,184,128,.34),0 0 0 1px rgba(0,0,0,.5) inset}
+  #marker .notch svg{width:36px;height:36px}
+  #marker .pawl{position:absolute;left:-15px;top:-354px;width:30px;height:32px;
+    background:linear-gradient(180deg,rgba(200,155,60,.95),rgba(120,88,34,.9));
+    clip-path:polygon(50% 100%,0 0,100% 0);
+    box-shadow:0 0 18px rgba(242,184,128,.55);opacity:.95}
+  #marker .notch path,#marker .notch circle,#marker .notch polygon,
+  #marker .notch rect,#marker .notch line{
+    stroke:var(--amber);stroke-width:5;fill:none;
+    vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+
+
+  /* atmosphere */
+  /* The wheel's cast shadow used to live here as a plain blurred ellipse. It is now
+     baked into the mount layer with the ring's own silhouette projected into the floor
+     plane, so it carries spoke structure and travels with the floor rather than with
+     the dial. What is left here is a low ambient darkening under the machine, which
+     keeps the tile from reading brighter under the wheel than beside it. */
+  #seat{position:absolute;left:800px;top:480px;width:0;height:0;pointer-events:none}
+  #seat::before{content:"";position:absolute;left:-460px;top:150px;
+    width:820px;height:250px;border-radius:50%;
+    background:radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(6,4,12,.30) 0%,rgba(6,4,12,.20) 46%,transparent 76%);
+    filter:blur(34px)}
+  /* ambient occlusion right where the rings sit in the air */
+  #seat::after{content:"";position:absolute;left:-330px;top:-300px;
+    width:660px;height:640px;border-radius:50%;
+    background:radial-gradient(ellipse 50% 50% at 50% 50%,
+      rgba(6,4,12,.30) 0%,transparent 70%);
+    filter:blur(34px)}
+  /* foreground falloff. Kept light: the near ironwork in both bottom corners and the
+     tile perspective are the depth cues, and the old .88 bottom crush ate them. */
+  #fg{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to top,rgba(5,4,12,.40) 0%,rgba(5,4,12,.15) 8%,
+      transparent 20%),
+      linear-gradient(to right,rgba(5,4,12,.38) 0%,transparent 13%,
+      transparent 87%,rgba(5,4,12,.38) 100%)}
+  #bloom{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
+    opacity:0;transition:opacity 1.6s ease;
+    background:radial-gradient(circle at 50% 53%,rgba(255,214,150,.44) 0%,
+      rgba(255,190,110,.19) 26%,transparent 58%)}
+  #sc-dial.solved #bloom{opacity:1}
+  /* When the machine lights, it is a light source, and the stone either side of it has
+     to admit that. Warm bounce on both piers, on the near floor, and on the two column
+     shafts that stand closest to it. */
+  #bounce{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
+    opacity:0;transition:opacity 1.9s ease;
+    background:
+      radial-gradient(ellipse 11% 32% at 16% 50%,rgba(255,200,132,.30),transparent 70%),
+      radial-gradient(ellipse 11% 32% at 85% 50%,rgba(255,200,132,.30),transparent 70%),
+      radial-gradient(ellipse 7% 22% at 27% 72%,rgba(255,196,126,.26),transparent 72%),
+      radial-gradient(ellipse 7% 22% at 73% 72%,rgba(255,196,126,.26),transparent 72%),
+      radial-gradient(ellipse 26% 9% at 50% 95%,rgba(255,198,130,.24),transparent 74%)}
+  #sc-dial.solved #bounce{opacity:1}
+  #vignette{position:absolute;inset:0;pointer-events:none;contain:strict;
+    background:radial-gradient(ellipse 78% 80% at 50% 50%,transparent 44%,rgba(4,3,10,.60) 100%)}
+  #grain{position:absolute;inset:-4%;pointer-events:none;opacity:.05;
+    will-change:transform;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation:grainshift 1.1s steps(3) infinite}
+  @keyframes grainshift{
+    0%{transform:translate3d(0,0,0)}33%{transform:translate3d(-14px,9px,0)}
+    66%{transform:translate3d(11px,-8px,0)}100%{transform:translate3d(0,0,0)}}
+  .mote{position:absolute;width:3px;height:3px;border-radius:50%;
+    background:rgba(255,226,180,.85);pointer-events:none;
+    filter:blur(.4px);animation:rise linear infinite}
+  @keyframes rise{
+    0%{transform:translate3d(0,0,0);opacity:0}
+    12%{opacity:.75}
+    88%{opacity:.5}
+    100%{transform:translate3d(var(--dx),-320px,0);opacity:0}}
+
+
+  /* ================================================================ scenes
+     Four rooms share one stage. Only the room you stand in is visible; the others are
+     hidden outright (visibility, not just opacity) so their layers cost the compositor
+     nothing. Moving between rooms is a 400ms crossfade with a small push in, per the
+     design. */
+  .scene{position:absolute;inset:0;opacity:0;visibility:hidden;transform:scale(1.035);
+    transition:opacity .4s ease,transform .7s cubic-bezier(.2,.7,.2,1),visibility 0s linear .4s}
+  .scene.on{opacity:1;visibility:visible;transform:none;
+    transition:opacity .4s ease,transform .7s cubic-bezier(.2,.7,.2,1),visibility 0s}
+  .plate-bg{position:absolute;inset:-3%;pointer-events:none;will-change:transform}
+  .plate-bg img{width:100%;height:100%;object-fit:cover;display:block}
+
+  /* the machine's alphabet, set in a dark enamel plate */
+  .gl svg{width:100%;height:100%;display:block;overflow:visible}
+  .gl path,.gl circle,.gl polygon,.gl rect,.gl line{fill:none;stroke:currentColor;
+    stroke-width:5;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+
+  /* a seal: dark until its machine is solved, then its glyph burns in the room's colour */
+  .seal{position:absolute;width:var(--d);height:var(--d);margin:calc(var(--d)/-2) 0 0 calc(var(--d)/-2);
+    border-radius:50%;pointer-events:none;display:grid;place-items:center;color:rgba(0,0,0,0);
+    background:radial-gradient(circle at 36% 30%,#f1d6a0 0%,#b78a3c 30%,#5a3f18 68%,#241708 100%);
+    box-shadow:0 6px 16px rgba(0,0,0,.65),0 0 0 2px rgba(0,0,0,.55)}
+  .seal::before{content:"";position:absolute;inset:16%;border-radius:50%;
+    background:radial-gradient(circle at 45% 40%,#1f1a26,#07060b 80%);
+    box-shadow:inset 0 3px 6px rgba(0,0,0,.9),0 1px 0 rgba(255,230,180,.25);
+    transition:background 1.2s ease,box-shadow 1.2s ease}
+  .seal .gl{position:relative;width:46%;height:46%;transition:color 1.2s ease,filter 1.2s ease}
+  .seal.lit{color:var(--c)}
+  .seal.lit::before{background:radial-gradient(circle at 50% 45%,
+      color-mix(in srgb,var(--c) 32%,#120e18),#07060b 85%);
+    box-shadow:inset 0 3px 6px rgba(0,0,0,.8),0 0 26px var(--c)}
+  .seal.lit .gl{color:#fff6e6;filter:drop-shadow(0 0 6px var(--c)) drop-shadow(0 0 16px var(--c))}
+
+  /* ---- the dial chamber's hub. Round 4's critic: "the hub is empty". The axle now ends
+     in a fixed brass boss that the rings turn around, and the boss carries the seal. */
+  #hub{position:absolute;left:800px;top:480px;width:0;height:0;pointer-events:none}
+  #hub .seal{--d:78px;--c:#f2b880;left:0;top:0}
+  #hub::before{content:"";position:absolute;left:-58px;top:-52px;width:116px;height:116px;border-radius:50%;
+    background:radial-gradient(circle,rgba(4,3,8,.55) 30%,transparent 70%);filter:blur(6px)}
+
+  /* ================================================================ pipe room */
+  #sc-pipes .plate-bg{filter:saturate(.95)}
+  #pipeRoom{position:absolute;inset:0}
+  /* the loft floor: the gothic plate is all window to the sill, so the machines stood on
+     nothing. Same stone as the dial chamber, one room over. */
+  #pipeFloor{position:absolute;left:-48px;top:640px;width:1696px;height:300px;pointer-events:none;
+    filter:brightness(.55) saturate(.8);
+    -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 16%);mask-image:linear-gradient(180deg,transparent 0,#000 16%)}
+  #pipeFloor img{width:100%;height:100%;display:block}
+  #pipeFloor::after,#courtShade{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(90deg,rgba(6,5,12,.92) 0,rgba(6,5,12,.35) 16%,transparent 30%,transparent 70%,rgba(6,5,12,.35) 84%,rgba(6,5,12,.92) 100%)}
+  .foot{position:absolute;pointer-events:none;border-radius:50%;
+    background:radial-gradient(ellipse 50% 50% at 50% 50%,rgba(0,0,0,.7),transparent 72%)}
+  #boardLegs{position:absolute;left:560px;top:760px;width:480px;height:90px;pointer-events:none}
+  #boardLegs i{position:absolute;top:0;width:26px;height:90px;border-radius:3px;
+    background:linear-gradient(90deg,#1a1206,#6d4d1d 30%,#caa259 45%,#6d4d1d 70%,#140d04)}
+  #pipeBoard{position:absolute;left:520px;top:206px;width:560px;height:560px;border-radius:10px;
+    background:
+      radial-gradient(circle at 18px 18px,#e4c483 0 4px,#6a4a1c 5px,transparent 7px),
+      radial-gradient(circle at calc(100% - 18px) 18px,#e4c483 0 4px,#6a4a1c 5px,transparent 7px),
+      radial-gradient(circle at 18px calc(100% - 18px),#e4c483 0 4px,#6a4a1c 5px,transparent 7px),
+      radial-gradient(circle at calc(100% - 18px) calc(100% - 18px),#e4c483 0 4px,#6a4a1c 5px,transparent 7px),
+      linear-gradient(145deg,#cfa458 0%,#8a6328 22%,#4c3413 55%,#8a6328 80%,#b98e45 100%);
+    box-shadow:0 30px 60px rgba(0,0,0,.7),0 0 0 2px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,240,200,.4)}
+  #pipeBoard::before{content:"";position:absolute;inset:22px;border-radius:4px;
+    background:linear-gradient(160deg,#2a2536,#15121d);box-shadow:inset 0 6px 18px rgba(0,0,0,.85)}
+  .tile{position:absolute;width:124px;height:124px;
+    filter:drop-shadow(3px 7px 5px rgba(0,0,0,.7))}
+  .tile::before{content:"";position:absolute;inset:3px;border-radius:5px;
+    background:linear-gradient(150deg,#3d3748 0%,#282332 55%,#1c1824 100%);
+    box-shadow:inset 0 1px 0 rgba(255,235,200,.14),inset 0 -2px 4px rgba(0,0,0,.5)}
+  .tile .rot{position:absolute;inset:0;transition:transform .2s cubic-bezier(.3,.7,.3,1)}
+  .tile svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+  .tile .flow{opacity:0;transition:opacity .35s ease}
+  .tile.lit .flow{opacity:1}
+  .flow path{fill:none;stroke:#8ff0dc;stroke-width:8;stroke-linecap:round;
+    stroke-dasharray:10 22;animation:flowdash .8s linear infinite;
+    filter:drop-shadow(0 0 5px #4fd1b5)}
+  @keyframes flowdash{to{stroke-dashoffset:-32}}
+  #pipeRoute{position:absolute;inset:0;width:1600px;height:900px;pointer-events:none;overflow:visible}
+  #pipeRoute .air{opacity:0;transition:opacity .5s ease}
+  #sc-pipes.solved #pipeRoute .air{opacity:1}
+
+  /* bellows, left: two boards and a leather body that breathes */
+  #bellows{position:absolute;left:150px;top:470px;width:300px;height:300px;pointer-events:none}
+  #bellows .lung{position:absolute;left:18px;top:60px;width:230px;height:170px;
+    transform-origin:100% 50%;animation:breathe 4.2s ease-in-out infinite}
+  #sc-pipes.solved #bellows .lung{animation-duration:2.6s}
+  @keyframes breathe{0%,100%{transform:scaleY(.82)}50%{transform:scaleY(1.04)}}
+
+  /* the organ, right */
+  #organ{position:absolute;left:1112px;top:150px;width:340px;height:640px;pointer-events:none}
+  .opipe{position:absolute;bottom:92px;width:26px;border-radius:13px 13px 3px 3px;
+    background:linear-gradient(90deg,#231707 0%,#6d4d1d 14%,#caa259 34%,#f6dfa6 44%,#caa259 56%,#7a5722 80%,#1e1406 100%);
+    box-shadow:0 10px 18px rgba(0,0,0,.55)}
+  .opipe::after{content:"";position:absolute;left:4px;right:4px;bottom:34px;height:22px;
+    border-radius:50% 50% 3px 3px/80% 80% 3px 3px;background:#0b0710;
+    box-shadow:inset 0 -3px 5px rgba(0,0,0,.9);transition:background 1s ease,box-shadow 1s ease}
+  .opipe::before{content:"";position:absolute;left:50%;bottom:0;width:10px;height:36px;margin-left:-5px;
+    background:linear-gradient(90deg,#3a280c,#b88d44,#3a280c);clip-path:polygon(15% 0,85% 0,100% 100%,0 100%)}
+  #sc-pipes.solved .opipe::after{background:radial-gradient(ellipse at 50% 70%,#bff7ea,#3fb89d 55%,#0c2a28);
+    box-shadow:0 0 18px #4fd1b5,inset 0 -3px 5px rgba(0,0,0,.4)}
+  #chest{position:absolute;left:0;right:0;bottom:0;height:96px;border-radius:6px;
+    background:linear-gradient(180deg,#5a3a1c 0%,#3b2410 40%,#26160a 100%);
+    box-shadow:0 20px 40px rgba(0,0,0,.7),inset 0 2px 0 rgba(255,220,160,.25),inset 0 -4px 10px rgba(0,0,0,.6)}
+  #chest::before{content:"";position:absolute;left:8px;right:8px;top:8px;height:8px;border-radius:3px;
+    background:linear-gradient(90deg,#6a4a1c,#e0bc74,#6a4a1c)}
+  #organ .seal{--d:70px;--c:#62d4b8;left:170px;top:590px}
+  #organ .glow{position:absolute;left:-60px;right:-60px;top:-40px;bottom:40px;pointer-events:none;
+    background:radial-gradient(ellipse 50% 60% at 50% 70%,rgba(98,212,184,.28),transparent 70%);
+    mix-blend-mode:screen;opacity:0;transition:opacity 1.4s ease}
+  #sc-pipes.solved #organ .glow{opacity:1}
+  #sc-pipes.solved #organ .pipes{animation:hum .11s linear infinite}
+  @keyframes hum{0%,100%{transform:translateY(0)}50%{transform:translateY(.6px)}}
+
+  /* ================================================================ water clock court */
+  #sc-water .plate-bg{inset:-3% -3% 18% -3%}
+  #courtFloor{position:absolute;left:-48px;top:600px;width:1696px;height:320px;pointer-events:none;
+    filter:brightness(.72) saturate(.85)}
+  #courtFloor img{width:100%;height:100%;display:block}
+  #balustrade{position:absolute;left:-20px;right:-20px;top:520px;height:96px;pointer-events:none;
+    background:
+      linear-gradient(180deg,#8d7a88 0,#4a3f55 10px,#2a2335 20px,transparent 20px),
+      repeating-linear-gradient(90deg,transparent 0 14px,
+        #221c2c 14px,#3e3450 22px,#6b5a6c 30px,#3e3450 38px,#1c1725 46px,transparent 46px 60px);
+    box-shadow:0 18px 30px rgba(0,0,0,.4)}
+  #balustrade::after{content:"";position:absolute;left:0;right:0;bottom:0;height:14px;
+    background:linear-gradient(180deg,#3e3450,#1b1624)}
+  #courtHaze{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse 60% 40% at 50% 58%,rgba(242,184,128,.20),transparent 70%)}
+  .cgear{position:absolute;pointer-events:none;opacity:.9;filter:brightness(.55) drop-shadow(0 10px 18px rgba(0,0,0,.7))}
+  .cgear img{width:100%;height:100%;display:block}
+  #clock{position:absolute;left:600px;top:40px;width:400px;height:400px;pointer-events:none;
+    filter:drop-shadow(0 22px 30px rgba(0,0,0,.7))}
+  #clock .face{position:absolute;inset:0;
+    -webkit-mask-image:radial-gradient(circle closest-side,transparent 64.5%,#000 66%);
+    mask-image:radial-gradient(circle closest-side,transparent 64.5%,#000 66%)}
+  #clock .face img{width:100%;height:100%;display:block}
+  #clock .well{position:absolute;inset:66px;border-radius:50%;
+    background:radial-gradient(circle at 50% 40%,#2b3b4a 0%,#131a26 55%,#07070d 100%);
+    box-shadow:inset 0 10px 30px rgba(0,0,0,.9)}
+  #gauge{position:absolute;inset:0;width:400px;height:400px;overflow:visible}
+  #gauge .zone{stroke:#a9d8d4;stroke-width:14;fill:none;opacity:.75;
+    filter:drop-shadow(0 0 6px #a9d8d4);transition:stroke 1s ease,opacity 1s ease}
+  #sc-water.solved #gauge .zone{stroke:#3fb8a4;opacity:1}
+  #gauge .tick{stroke:rgba(242,200,140,.55);stroke-width:2}
+  #clock .seal{--d:64px;--c:#a9d8d4;left:200px;top:200px}
+  #column{position:absolute;left:762px;top:420px;width:76px;height:390px;pointer-events:none}
+  #column canvas{position:absolute;left:10px;top:18px;width:56px;height:352px;border-radius:28px}
+  #column .glass{position:absolute;left:10px;top:18px;width:56px;height:352px;border-radius:28px;
+    background:linear-gradient(90deg,rgba(255,255,255,.10),rgba(255,255,255,.02) 30%,rgba(255,255,255,.22) 42%,rgba(255,255,255,0) 55%,rgba(0,0,0,.25));
+    box-shadow:inset 0 0 0 2px rgba(200,230,230,.25)}
+  #column .cap{position:absolute;left:0;width:76px;height:26px;border-radius:6px;
+    background:linear-gradient(90deg,#3a270c,#b88d44 30%,#f3d69a 45%,#a47a36 65%,#2c1d08)}
+  #beamWrap{position:absolute;left:0;top:0;width:1600px;height:900px;pointer-events:none}
+  #beam{position:absolute;left:470px;top:462px;width:660px;height:16px;border-radius:8px;
+    transform-origin:330px 8px;
+    background:linear-gradient(180deg,#f0d392 0%,#b88d44 35%,#6c4c1c 75%,#3a270c 100%);
+    box-shadow:0 10px 16px rgba(0,0,0,.6)}
+  #beam::before,#beam::after{content:"";position:absolute;top:-6px;width:28px;height:28px;border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,#f6dfa6,#8a6328 60%,#3a270c)}
+  #beam::before{left:-10px}#beam::after{right:-10px}
+  #pivot{position:absolute;left:782px;top:452px;width:36px;height:36px;border-radius:50%;
+    background:radial-gradient(circle at 38% 32%,#fbe6b4,#b88d44 45%,#3a270c 90%);
+    box-shadow:0 4px 10px rgba(0,0,0,.7)}
+  .pan{position:absolute;width:300px;height:190px;margin-left:-150px;pointer-events:none}
+  .pan svg{width:100%;height:100%;overflow:visible}
+  #shelf{position:absolute;left:560px;top:792px;width:480px;height:44px;border-radius:4px;pointer-events:none;
+    background:linear-gradient(180deg,#8a7a86 0,#4d4258 6px,#2d2638 60%,#1a1522);
+    box-shadow:0 18px 28px rgba(0,0,0,.6)}
+  .weight{position:absolute;pointer-events:none;will-change:transform;
+    filter:drop-shadow(0 8px 8px rgba(0,0,0,.6))}
+  .weight svg{width:100%;height:100%;display:block;overflow:visible}
+  .weight.held{filter:drop-shadow(0 22px 18px rgba(0,0,0,.55)) brightness(1.12)}
+
+  /* ================================================================ keystone hall */
+  #armWrap{position:absolute;left:630px;top:176px;width:340px;height:465px;pointer-events:none;
+    perspective:1400px}
+  #armillary{position:absolute;inset:0;transform-style:preserve-3d;
+    filter:drop-shadow(0 26px 30px rgba(0,0,0,.75)) brightness(.9)}
+  #armillary img{width:100%;height:100%;display:block}
+  #sc-hall.sing #armillary{animation:sway 5s ease-in-out infinite;
+    filter:drop-shadow(0 26px 30px rgba(0,0,0,.75)) drop-shadow(0 0 40px rgba(255,214,150,.7)) brightness(1.15)}
+  @keyframes sway{0%,100%{transform:rotateY(-22deg)}50%{transform:rotateY(22deg)}}
+  .lamp{position:absolute;width:0;height:0;pointer-events:none}
+  .lamp .chain{position:absolute;left:-2px;bottom:52px;width:4px;height:600px;
+    background:repeating-linear-gradient(180deg,#7a5a24 0 6px,#2c1e0a 6px 9px)}
+  .lamp .cage{position:absolute;left:-56px;top:-56px;width:112px;height:112px;border-radius:50%;
+    background:radial-gradient(circle at 36% 30%,#f1d6a0,#b78a3c 34%,#4c3413 72%,#1e1406);
+    box-shadow:0 14px 26px rgba(0,0,0,.7)}
+  .lamp .glass{position:absolute;left:-40px;top:-40px;width:80px;height:80px;border-radius:50%;
+    display:grid;place-items:center;color:transparent;
+    background:radial-gradient(circle at 45% 38%,#2a2432,#0a080e 80%);
+    box-shadow:inset 0 4px 10px rgba(0,0,0,.9);transition:background 1s ease,box-shadow 1s ease}
+  .lamp .glass .gl{width:44%;height:44%;transition:color .6s ease}
+  .lamp.lit .glass{background:radial-gradient(circle at 50% 45%,#fff3dc 0%,var(--c) 45%,
+      color-mix(in srgb,var(--c) 40%,#0a080e) 100%);
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.35),0 0 34px var(--c),0 0 80px color-mix(in srgb,var(--c) 60%,transparent)}
+  .lamp.lit.told .glass .gl{color:#1a1208}
+  .lamp .beam{position:absolute;left:0;top:0;width:0;height:6px;margin-top:-3px;transform-origin:0 50%;
+    background:linear-gradient(90deg,var(--c),transparent);opacity:0;border-radius:3px;
+    filter:blur(2px);transition:opacity 1s ease,width 1.2s ease}
+  #sc-hall.sing .lamp .beam{opacity:.85}
+  #keys{position:absolute;left:0;top:0;width:1600px;height:900px;pointer-events:none}
+  #plinth{position:absolute;left:712px;top:628px;width:176px;height:66px;pointer-events:none;
+    border-radius:6px 6px 0 0;
+    background:linear-gradient(180deg,#8a7a86 0,#4d4258 6px,#2d2638 60%,#1a1522);
+    box-shadow:0 -2px 0 rgba(255,235,210,.12) inset,0 10px 20px rgba(0,0,0,.6)}
+  #keyBench{position:absolute;left:312px;top:690px;width:976px;height:124px;border-radius:12px;
+    background:linear-gradient(180deg,#6d5c6c 0,#3b3249 8px,#241e30 60%,#151119);
+    box-shadow:0 26px 40px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,235,210,.25)}
+  .kkey{position:absolute;width:94px;height:94px;margin:-47px 0 0 -47px;border-radius:50%;
+    display:grid;place-items:center;color:rgba(200,160,90,.45);
+    background:radial-gradient(circle at 36% 30%,#d9b77a,#8a6328 34%,#3a270c 78%,#1a1206);
+    box-shadow:0 8px 14px rgba(0,0,0,.7);transition:transform .12s ease,color .4s ease}
+  .kkey::before{content:"";position:absolute;inset:13px;border-radius:50%;
+    background:radial-gradient(circle at 45% 40%,#241e2c,#08070c 85%);
+    box-shadow:inset 0 3px 6px rgba(0,0,0,.9);transition:box-shadow .5s ease,background .5s ease}
+  .kkey .gl{position:relative;width:42%;height:42%}
+  #keys.awake .kkey{color:#e6bd72}
+  #keys.awake .kkey::before{box-shadow:inset 0 3px 6px rgba(0,0,0,.9),0 0 16px rgba(242,184,128,.35)}
+  .kkey.down{transform:translateY(3px) scale(.96)}
+  .kkey.set{color:#fff6e6}
+  .kkey.set::before{background:radial-gradient(circle,color-mix(in srgb,var(--c) 45%,#120e18),#08070c 90%);
+    box-shadow:inset 0 3px 6px rgba(0,0,0,.6),0 0 26px var(--c)}
+  .kkey.set .gl{filter:drop-shadow(0 0 6px var(--c))}
+  #keys.shake{animation:shake .2s ease}
+  @keyframes shake{0%,100%{transform:none}25%{transform:translateX(-9px)}75%{transform:translateX(9px)}}
+  #hallBloom{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;opacity:0;
+    transition:opacity 2.2s ease;
+    background:radial-gradient(circle at 50% 42%,rgba(255,226,170,.62) 0%,rgba(255,190,110,.24) 30%,transparent 62%)}
+  #sc-hall.sing #hallBloom{opacity:1}
+  #flash{position:absolute;inset:0;pointer-events:none;background:#fff1d6;opacity:0;z-index:35;
+    mix-blend-mode:screen}
+
+  /* ================================================================ ui */
+  #title{position:absolute;inset:0;display:grid;place-items:center;
+    background:radial-gradient(ellipse at 50% 50%,rgba(10,8,20,.72),rgba(4,3,10,.95));
+    z-index:40;cursor:pointer;transition:opacity 1.1s ease}
+  #title.gone{opacity:0;pointer-events:none}
+  #title .inner{text-align:center;transform:translateY(-14px)}
+  #title h1{font-size:66px;font-weight:400;letter-spacing:.30em;
+    color:#f6d9ad;text-shadow:0 0 46px rgba(242,184,128,.62);margin-bottom:22px}
+  #title p{font-size:17px;letter-spacing:.30em;text-transform:uppercase;
+    color:rgba(242,184,128,.68);animation:pulse 3.1s ease-in-out infinite}
+  #title small{display:block;margin-top:40px;font-size:13px;letter-spacing:.24em;
+    text-transform:uppercase;color:rgba(242,184,128,.34)}
+  @keyframes pulse{0%,100%{opacity:.42}50%{opacity:.95}}
+
+  #hint{position:absolute;left:0;right:0;bottom:30px;text-align:center;z-index:31;
+    font-size:15px;letter-spacing:.24em;text-transform:uppercase;
+    color:rgba(242,184,128,.62);pointer-events:none;text-shadow:0 1px 6px #000;
+    opacity:0;transition:opacity .9s ease}
+  #hint.show{opacity:1}
+
+  #banner{position:absolute;left:0;right:0;bottom:86px;text-align:center;z-index:31;
+    font-size:30px;letter-spacing:.34em;text-transform:uppercase;
+    color:#ffe9c4;text-shadow:0 0 34px rgba(242,184,128,.8),0 2px 8px #000;
+    opacity:0;transform:translateY(12px);
+    transition:opacity 1.1s ease,transform 1.1s ease;pointer-events:none}
+  #banner.show{opacity:1;transform:none}
+  #stage[data-scene=hall] #banner,#stage[data-scene=water] #banner{bottom:18px}
+
+  .nav{position:absolute;top:50%;width:84px;height:124px;margin-top:-62px;
+    display:grid;place-items:center;cursor:pointer;opacity:.34;
+    transition:opacity .3s;z-index:30}
+  .nav:hover{opacity:.9}
+  .nav.left{left:calc(8% - 42px)}
+  .nav.right{right:calc(8% - 42px)}
+  .nav.hidden{display:none}
+  .nav svg{width:38px;height:38px;stroke:var(--amber);stroke-width:2.4;
+    fill:none;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 4px #000)}
+  .nav.beckon{animation:beckon 1.8s ease-in-out infinite}
+  @keyframes beckon{0%,100%{opacity:.4}50%{opacity:1}}
+  #navHall{top:22px;right:26px;margin:0;width:120px;height:74px}
+  #navHall .dots{display:flex;gap:10px}
+  #navHall .dots i{width:14px;height:14px;border-radius:50%;background:var(--c);
+    box-shadow:0 0 10px var(--c)}
+
+  #card{position:absolute;inset:0;z-index:38;display:grid;place-items:center;
+    background:radial-gradient(ellipse at 50% 50%,rgba(10,8,20,.35),rgba(4,3,10,.82));
+    opacity:0;pointer-events:none;transition:opacity 1.4s ease}
+  #card.show{opacity:1;pointer-events:auto}
+  #card .inner{text-align:center}
+  #card h2{font-size:54px;font-weight:400;letter-spacing:.3em;color:#fff0d4;
+    text-shadow:0 0 50px rgba(242,184,128,.8);margin-bottom:18px}
+  #card p{font-size:16px;letter-spacing:.28em;text-transform:uppercase;color:rgba(242,184,128,.7);
+    margin-bottom:44px}
+  #card .go{display:flex;gap:26px;justify-content:center}
+  #card button{font:inherit;font-size:14px;letter-spacing:.22em;text-transform:uppercase;
+    color:#f6d9ad;background:rgba(20,14,8,.7);border:1px solid rgba(200,155,60,.7);
+    border-radius:6px;padding:16px 22px;cursor:pointer;min-width:150px}
+  #card button:hover{background:rgba(60,40,14,.8)}
+</style>
+</head>
+<body>
+<div id="fit"><div id="stage">
+
+<!-- ============================================================ 1. the dial chamber -->
+<section class="scene" id="sc-dial">
+  <div class="layer" id="chamber"><img alt="" src="assets/chamber.webp"></div>
+  <!-- The light in the far hall. It is BEHIND the near plane on purpose: see the note on
+       #shafts in the stylesheet. Everything from here down in this list is in front of
+       the room and must not have the room painted back over it. -->
+  <div class="layer" id="shafts"><img alt="" src="assets/shafts.webp"></div>
+  <div id="nearplane">
+    <div id="nearfloor"><img alt="" src="assets/nearfloor.webp"></div>
+    <div class="layer" id="nearlight"><img alt="" src="assets/shafts.webp"></div>
+    <div id="floorglow"><img alt="" src="assets/floorglow.webp"></div>
+    <div id="mount"><img alt="" src="assets/mount.webp"></div>
+  </div>
+  <div id="depths"></div>
+  <div id="motes"></div>
+
+  <div id="seat"></div>
+  <div id="dial"></div>
+  <div id="keylight"></div>
+  <div id="hub"><div class="seal" id="sealDial"><div class="gl"></div></div></div>
+  <div id="marker"><div class="notch"></div><div class="pawl"></div></div>
+
+  <div id="fg"></div>
+  <div id="bloom"></div>
+  <div id="bounce"></div>
+</section>
+
+<!-- ============================================================ 2. the pipe room -->
+<section class="scene" id="sc-pipes">
+  <div class="plate-bg"><img alt="" src="assets/pipe_room.webp"></div>
+  <div id="pipeRoom">
+    <div id="pipeFloor"><img alt="" src="assets/nearfloor.webp"></div>
+    <div class="foot" style="left:130px;top:740px;width:360px;height:70px"></div>
+    <div class="foot" style="left:1080px;top:750px;width:400px;height:80px"></div>
+    <div class="foot" style="left:520px;top:815px;width:560px;height:60px"></div>
+    <div id="boardLegs"><i style="left:40px"></i><i style="right:40px"></i></div>
+    <svg id="pipeRoute" viewBox="0 0 1600 900"></svg>
+    <div id="bellows"></div>
+    <div id="organ"><div class="glow"></div><div class="pipes"></div><div id="chest"></div>
+      <div class="seal" id="sealPipes"><div class="gl"></div></div></div>
+    <div id="pipeBoard"></div>
+  </div>
+</section>
+
+<!-- ============================================================ 3. the water clock court -->
+<section class="scene" id="sc-water">
+  <div class="plate-bg"><img alt="" src="assets/court_sky.webp"></div>
+  <div id="courtHaze"></div>
+  <div id="balustrade"></div>
+  <div id="courtFloor"><img alt="" src="assets/nearfloor.webp"><div id="courtShade"></div></div>
+  <div class="cgear" id="cgA" style="left:470px;top:70px;width:250px;height:250px"><img alt="" src="assets/gear_b.webp"></div>
+  <div class="cgear" id="cgB" style="left:900px;top:10px;width:190px;height:190px"><img alt="" src="assets/gear_c.webp"></div>
+  <div id="column"><canvas width="112" height="704"></canvas><div class="glass"></div>
+    <div class="cap" style="top:0"></div><div class="cap" style="bottom:0"></div></div>
+  <div id="clock"><div class="well"></div><div class="face"><img alt="" src="assets/clockface.webp"></div>
+    <svg id="gauge" viewBox="0 0 400 400"></svg>
+    <div class="seal" id="sealWater"><div class="gl"></div></div></div>
+  <div id="beamWrap"><div id="panL" class="pan"></div><div id="panR" class="pan"></div>
+    <div id="beam"></div><div id="pivot"></div></div>
+  <div id="shelf"></div>
+  <div id="weights"></div>
+</section>
+
+<!-- ============================================================ 4. the keystone hall -->
+<section class="scene" id="sc-hall">
+  <div class="plate-bg"><img alt="" src="assets/keystone.webp"></div>
+  <div id="lamps"></div>
+  <div id="armWrap"><div id="armillary"><img alt="" src="assets/armillary.webp"></div></div>
+  <div id="plinth"></div>
+  <div id="keyBench"></div>
+  <div id="keys"></div>
+  <div id="hallBloom"></div>
+</section>
+
+  <div id="vignette"></div>
+  <div id="grain"></div>
+  <div id="flash"></div>
+
+  <div id="banner"></div>
+  <div id="hint"></div>
+
+  <div class="nav left hidden" id="navLeft">
+    <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+  </div>
+  <div class="nav right" id="navRight">
+    <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+  </div>
+  <div class="nav hidden" id="navHall" title="Keystone Hall">
+    <div class="dots"><i style="--c:#f2b880"></i><i style="--c:#62d4b8"></i><i style="--c:#a9d8d4"></i></div>
+  </div>
+
+  <div id="card"><div class="inner">
+    <h2>THE MACHINE SINGS</h2>
+    <p>the island is yours to wander</p>
+    <div class="go">
+      <button data-go="dial">Dials</button><button data-go="pipes">Pipes</button>
+      <button data-go="water">Water</button><button data-go="hall">Hall</button>
+    </div>
+  </div></div>
+
+  <div id="title"><div class="inner">
+    <h1>AH MAH DAY US</h1>
+    <p>touch to wake the machine</p>
+    <small>sound on &nbsp;&middot;&nbsp; landscape</small>
+  </div></div>
+</div></div>
+
+<script>
+(() => {
+'use strict';
+
+// ================================================================ glyphs
+// Eight marks. Geometric, wordless, readable at 52px. The machine's alphabet.
+const GLYPHS = {
+  ring:    '<circle cx="26" cy="26" r="15"/><circle cx="26" cy="26" r="4"/>',
+  triangle:'<polygon points="26,10 42,40 10,40"/>',
+  square:  '<rect x="12" y="12" width="28" height="28" rx="2"/>',
+  diamond: '<polygon points="26,8 44,26 26,44 8,26"/>',
+  cross:   '<line x1="26" y1="9" x2="26" y2="43"/><line x1="9" y1="26" x2="43" y2="26"/>',
+  star:    '<polygon points="26,8 31,21 45,21 34,29 38,43 26,35 14,43 18,29 7,21 21,21"/>',
+  arc:     '<path d="M12 38a17 17 0 0 1 28-13"/><circle cx="26" cy="26" r="3"/>',
+  bars:    '<line x1="14" y1="16" x2="38" y2="16"/><line x1="14" y1="26" x2="38" y2="26"/><line x1="14" y1="36" x2="38" y2="36"/>',
+};
+const NAMES = Object.keys(GLYPHS);
+const svg = k => `<svg viewBox="0 0 52 52">${GLYPHS[k]}</svg>`;
+
+// ================================================================ session seed
+// The three seals are drawn fresh every session so the keystone has to be read, not
+// remembered from last time. ?seed=N pins a session for tests and captures.
+const qs = new URLSearchParams(location.search);
+const SEED = qs.has('seed') ? (+qs.get('seed') >>> 0) : (Math.random() * 2 ** 32) >>> 0;
+function mulberry32(a){ return () => { a |= 0; a = a + 0x6D2B79F5 | 0;
+  let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rng = mulberry32(SEED);
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--){ const j = (rng() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+const SCENES = ['dial', 'pipes', 'water', 'hall'];
+const COLOR = { dial:'#f2b880', pipes:'#62d4b8', water:'#a9d8d4' };
+const BANNER = { dial:'The dials hold', pipes:'The pipes breathe', water:'The water keeps time' };
+// the dials' own target mark is 'ring'; the seals never reuse it, so nothing reads twice
+const SEALS = (() => { const p = shuffle(NAMES.filter(n => n !== 'ring')); return { dial:p[0], pipes:p[1], water:p[2] }; })();
+const KEY_ORDER = shuffle(NAMES.slice());
+
+// ================================================================ state
+const stage = document.getElementById('stage');
+const $ = id => document.getElementById(id);
+const S = {
+  scene:'dial', started:false, montage:false, frames:0,
+  solved:{ dial:false, pipes:false, water:false }, done:false,
+  visited:{}, hall:{ progress:0 },
+};
+const sceneEl = k => $('sc-' + k);
+
+function setSeal(el, name, color){
+  el.style.setProperty('--c', color);
+  el.querySelector('.gl').innerHTML = svg(name);
+}
+setSeal($('sealDial'), SEALS.dial, COLOR.dial);
+setSeal($('sealPipes'), SEALS.pipes, COLOR.pipes);
+setSeal($('sealWater'), SEALS.water, COLOR.water);
+
+// ================================================================ audio
+let AC = null, master = null, music = null, musicGain = null;
+const beds = {};
+let organ = null;
+function ac(){
+  if (!AC){
+    AC = new (window.AudioContext||window.webkitAudioContext)();
+    master = AC.createGain(); master.gain.value = 0.9; master.connect(AC.destination);
+  }
+  return AC;
+}
+function tone(freq, dur, type='sine', gain=.15, when=0){
+  if (!AC) return;
+  const c = AC, t = c.currentTime + when;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + .02);
+}
+function noiseClick(gain=.20, freq=1750, len=.055){
+  if (!AC) return;
+  const c = AC, n = Math.floor(c.sampleRate * len);
+  const b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+  for (let i=0;i<n;i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/n, 5);
+  const s = c.createBufferSource(); s.buffer = b;
+  const f = c.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq; f.Q.value=1.1;
+  const g = c.createGain(); g.gain.value = gain;
+  s.connect(f); f.connect(g); g.connect(master); s.start();
+}
+const sfxSnap  = () => { noiseClick(.17); tone(320, .07, 'triangle', .05); };
+const sfxClunk = () => {
+  noiseClick(.30); tone(78, .48, 'sine', .30); tone(117, .34, 'sine', .14);
+  [0,.10,.20,.32].forEach((d,i)=>tone([392,523.25,659.25,784][i], .95, 'sine', .085, d));
+};
+const sfxDeny  = () => { tone(132, .2, 'sine', .08); tone(127, .2, 'triangle', .04); };
+const sfxClink = () => { noiseClick(.14, 2600, .04); tone(1180, .12, 'triangle', .035); tone(1770, .09, 'sine', .02); };
+const sfxDrop  = () => { noiseClick(.16, 900, .05); tone(210, .18, 'sine', .07); tone(520, .5, 'sine', .025, .02); };
+const sfxChimes = () => [523.25,659.25,783.99,1046.5,1318.5].forEach((f,i)=>{
+  tone(f, 1.6, 'sine', .07, i*.14); tone(f*2.01, .7, 'sine', .015, i*.14); });
+const sfxKey = i => { tone([392, 493.88, 587.33][i] || 392, .5, 'sine', .1); tone(([392, 493.88, 587.33][i]||392)*2, .3, 'triangle', .02); };
+
+// Scene beds: four seamless four-second loops, synthesised once. Every loop length is an
+// integer number of cycles of every tone in it, so the seam never clicks.
+function makeBeds(){
+  const c = AC, sr = c.sampleRate, n = sr * 4;
+  const mk = fill => { const b = c.createBuffer(1, n, sr); fill(b.getChannelData(0)); return b; };
+  const bufs = {
+    dial: mk(d => { for (let i=0;i<n;i++){ const t=i/sr;
+      d[i] = Math.sin(2*Math.PI*60*t)*.05 + Math.sin(2*Math.PI*120*t)*.015; }
+      for (let k=0;k<4;k++){ const o=k*sr; for (let i=0;i<sr*.03;i++) d[o+i]+= (Math.random()*2-1)*Math.pow(1-i/(sr*.03),6)*.35; } }),
+    pipes: mk(d => { let b=0; for (let i=0;i<n;i++){ b = b*.985 + (Math.random()*2-1)*.06;
+      d[i] = b * Math.pow(Math.sin(Math.PI*i/n*2), 2) * 1.4; } }),
+    water: mk(d => { for (let i=0;i<n;i++) d[i] = (Math.random()*2-1)*.012;
+      for (let k=0;k<26;k++){ const o=(Math.random()*(n-sr*.2))|0, f=900+Math.random()*2200;
+        for (let i=0;i<sr*.08;i++){ const t=i/sr; d[o+i]+= Math.sin(2*Math.PI*(f+f*6*t)*t)*Math.exp(-t*60)*.22; } } }),
+    hall: mk(d => { for (let i=0;i<n;i++){ const t=i/sr;
+      d[i] = (Math.sin(2*Math.PI*55*t)*.06 + Math.sin(2*Math.PI*82.5*t)*.035 + Math.sin(2*Math.PI*110.25*t)*.02)
+        * (0.75 + 0.25*Math.sin(2*Math.PI*t/4)); } }),
+  };
+  for (const k of SCENES){
+    const s = c.createBufferSource(); s.buffer = bufs[k]; s.loop = true;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = k === 'water' ? 5000 : 1400;
+    const g = c.createGain(); g.gain.value = 0;
+    s.connect(f); f.connect(g); g.connect(master); s.start();
+    beds[k] = g;
+  }
+  mixBeds();
+}
+function mixBeds(){
+  if (!AC || !beds.dial) return;
+  const t = AC.currentTime;
+  for (const k of SCENES){
+    beds[k].gain.cancelScheduledValues(t);
+    beds[k].gain.setTargetAtTime(k === S.scene ? (k === 'hall' ? .9 : .7) : 0, t, .25);
+  }
+  if (organ) organ.g.gain.setTargetAtTime(organTarget(), t, .3);
+}
+
+// The organ: once the pipes carry air it sounds for the rest of the session. Loud in its
+// own room, a distant hum everywhere else, because it is the same machine.
+function organTarget(){ return !S.solved.pipes ? 0 : S.scene === 'pipes' ? .11 : .03; }
+function organOn(){
+  if (!AC) return;
+  if (!organ){
+    const g = AC.createGain(); g.gain.value = 0;
+    const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; f.Q.value = .7;
+    f.connect(g); g.connect(master);
+    const oscs = [65.41, 98.0, 130.81, 196.0, 261.63].map((hz, i) => {
+      const o = AC.createOscillator(); o.type = i < 2 ? 'sawtooth' : 'triangle';
+      o.frequency.value = hz; o.detune.value = (i % 2 ? 4 : -4);
+      const og = AC.createGain(); og.gain.value = [.35,.28,.22,.14,.08][i];
+      o.connect(og); og.connect(f); o.start(); return o;
+    });
+    organ = { g, f, oscs };
+  }
+  organ.g.gain.setTargetAtTime(organTarget(), AC.currentTime, .35);
+}
+
+async function startMusic(){
+  const c = ac();
+  if (c.state === 'suspended') { try { await c.resume(); } catch(e){} }
+  if (!beds.dial) makeBeds();
+  if (music) return;
+  try{
+    const res = await fetch('assets/track.m4a');
+    const buf = await c.decodeAudioData(await res.arrayBuffer());
+    music = c.createBufferSource();
+    music.buffer = buf;
+    music.loop = true;
+    // explicit loop points: encoder padding can otherwise open a gap at the seam
+    music.loopStart = 0;
+    music.loopEnd = buf.duration;
+    musicGain = c.createGain(); musicGain.gain.value = 0;
+    musicGain.gain.linearRampToValueAtTime(0.5, c.currentTime + 2.4);
+    music.connect(musicGain); musicGain.connect(master);
+    music.start(0);
+  } catch(e){ /* music is optional; the machine still runs */ }
+}
+
+// ================================================================ ui helpers
+let hintT = null;
+const hintEl = $('hint');
+function hint(msg, ms=4200){
+  clearTimeout(hintT);
+  if (!msg){ hintEl.classList.remove('show'); return; }
+  hintEl.textContent = msg; hintEl.classList.add('show');
+  hintT = setTimeout(()=>hintEl.classList.remove('show'), ms);
+}
+let bannerT = null;
+function banner(msg, ms=3600){
+  const b = $('banner'); clearTimeout(bannerT);
+  b.textContent = msg; b.classList.add('show');
+  bannerT = setTimeout(()=>b.classList.remove('show'), ms);
+}
+function stagePoint(ev){
+  const r = stage.getBoundingClientRect();
+  const sx = r.width / 1600;
+  return { x:(ev.clientX - r.left)/sx, y:(ev.clientY - r.top)/sx };
+}
+function toClient(x, y){
+  const b = stage.getBoundingClientRect(), s = b.width/1600;
+  return { x:b.left + x*s, y:b.top + y*s };
+}
+
+// ================================================================ scene 1: the dial chamber
+const SEGMENTS = 8, STEP = 360 / SEGMENTS, DIAL_Y = 480;
+const RINGS = [
+  // glyphR is measured to each ring's actual engraved band, not guessed:
+  // the wheel's rim, the numeral band, the gear face inside its teeth.
+  { id:'outer', src:'assets/ring_outer.webp', size:660, glyphR:218, glyphSize:48, inner:208, outer:345 },
+  { id:'mid',   src:'assets/ring_mid.webp',   size:400, glyphR:160, glyphSize:38, inner:118, outer:208 },
+  { id:'inner', src:'assets/ring_inner.webp', size:214, glyphR: 68, glyphSize:29, inner:  0, outer:118 },
+];
+const norm = a => ((a % 360) + 360) % 360;
+
+// deterministic layout: every ring carries all eight marks in its own order
+const ORDERS = [
+  ['ring','triangle','square','diamond','cross','star','arc','bars'],
+  ['star','cross','ring','bars','triangle','arc','diamond','square'],
+  ['bars','diamond','arc','triangle','square','ring','star','cross'],
+];
+const TARGET = 'ring';
+const START = [3, 6, 1];
+
+const dialEl = $('dial');
+const D = { rings:[] };
+
+RINGS.forEach((cfg, i) => {
+  const el = document.createElement('div');
+  el.className = 'ring ' + cfg.id;
+  el.style.width = cfg.size + 'px';
+  el.style.height = cfg.size + 'px';
+  el.style.left = (-cfg.size / 2) + 'px';
+  el.style.top  = (-cfg.size / 2) + 'px';
+  el.innerHTML = `<img alt="" src="${cfg.src}">`;
+
+  const order = ORDERS[i];
+  order.forEach((name, k) => {
+    const g = document.createElement('div');
+    g.className = 'glyph' + (name === TARGET ? ' key' : '');
+    g.dataset.seg = k;
+    g.style.setProperty('--gs', cfg.glyphSize + 'px');
+    g.innerHTML = svg(name);
+    const a = (k * STEP - 90) * Math.PI / 180;
+    g.style.left = (cfg.size/2 + Math.cos(a) * cfg.glyphR) + 'px';
+    g.style.top  = (cfg.size/2 + Math.sin(a) * cfg.glyphR) + 'px';
+    el.appendChild(g);
+  });
+
+  dialEl.appendChild(el);
+  // keySeg is the slot holding the target mark; align it to the notch to solve
+  D.rings.push({ cfg, el, rot:0, keySeg:order.indexOf(TARGET), anim:null });
+});
+
+function dialReset(){
+  START.forEach((seg, i) => { const r = D.rings[i]; r.rot = norm(-(r.keySeg - seg) * STEP); applyRing(r); });
+}
+dialReset();
+document.querySelector('#marker .notch').innerHTML = svg(TARGET);
+
+// gears sunk in the dark. Stage coords, not dial-relative: they belong to the room's
+// shadowed corners, not to a ring around the mechanism.
+const depths = $('depths');
+[[118,92,330,12],[1452,58,286,-20]].forEach((d,i)=>{
+  const el = document.createElement('div');
+  el.className = 'depth';
+  el.style.cssText = `left:${d[0]-d[2]/2}px;top:${d[1]-d[2]/2}px;`+
+                     `width:${d[2]}px;height:${d[2]}px;transform:rotate(${d[3]}deg)`;
+  el.innerHTML = `<img alt="" src="assets/depth_${i}.webp">`;
+  depths.appendChild(el);
+});
+
+// dust
+const motes = $('motes');
+for (let i = 0; i < 26; i++) {
+  const m = document.createElement('div');
+  m.className = 'mote';
+  m.style.left = (Math.random()*1600)+'px';
+  m.style.top  = (620 + Math.random()*300)+'px';
+  m.style.setProperty('--dx', (Math.random()*70-35)+'px');
+  m.style.animationDuration = (12 + Math.random()*16)+'s';
+  m.style.animationDelay = (-Math.random()*22)+'s';
+  m.style.opacity = .3 + Math.random()*.5;
+  motes.appendChild(m);
+}
+
+function applyRing(r){ r.el.style.transform = `rotate(${r.rot}deg)`; }
+function segOf(r){ return norm(Math.round(r.rot / STEP) * STEP) / STEP | 0; }
+// the slot currently sitting at the notch
+function atNotch(r){ return norm(r.keySeg * STEP + r.rot); }
+function ringSolved(r){ const a = atNotch(r); return a < 0.001 || a > 359.999; }
+
+function pickRing(p){
+  const dx = p.x - 800, dy = p.y - DIAL_Y, d = Math.hypot(dx, dy);
+  for (const r of D.rings)
+    if (d >= r.cfg.inner && d <= r.cfg.outer) return r;
+  return null;
+}
+function angleAt(p){ return Math.atan2(p.y - DIAL_Y, p.x - 800) * 180 / Math.PI; }
+
+let drag = null;
+function dialDown(p, ev){
+  if (S.solved.dial) return false;
+  const r = pickRing(p);
+  if (!r) return false;
+  if (r.anim){ cancelAnimationFrame(r.anim); r.anim = null; }
+  drag = { r, a0:angleAt(p), rot0:r.rot, moved:0 };
+  return true;
+}
+function dialMove(p){
+  if (!drag) return;
+  const delta = angleAt(p) - drag.a0;
+  let d = delta; while (d > 180) d -= 360; while (d < -180) d += 360;
+  drag.moved += Math.abs(d - (drag.last||0)); drag.last = d;
+  drag.r.rot = norm(drag.rot0 + d);
+  view.dirty = true;
+}
+function dialUp(){
+  if (!drag) return;
+  const r = drag.r; drag = null;
+  snapTo(r, norm(Math.round(r.rot / STEP) * STEP));
+}
+function snapTo(r, target, ms=200){
+  const from = r.rot;
+  let d = target - from; while (d > 180) d -= 360; while (d < -180) d += 360;
+  if (Math.abs(d) < 0.01){ r.rot = target; applyRing(r); dialCheck(); return; }
+  const t0 = performance.now();
+  const tick = now => {
+    const t = Math.min(1, (now - t0)/ms);
+    const e = 1 - Math.pow(1 - t, 3);           // cubic ease out, per the design
+    r.rot = norm(from + d*e); applyRing(r); S.frames++;
+    if (t < 1) r.anim = requestAnimationFrame(tick);
+    else { r.anim = null; r.rot = norm(target); applyRing(r); sfxSnap(); dialCheck(); }
+  };
+  r.anim = requestAnimationFrame(tick);
+}
+function dialCheck(){
+  const all = D.rings.every(ringSolved);
+  D.rings.forEach(r => r.el.classList.toggle('lit', ringSolved(r)));
+  if (all && !S.solved.dial){
+    sfxClunk();
+    solve('dial');
+  }
+  return all;
+}
+
+// ================================================================ parallax
+// Parallax rates, one per plane, ordered far to near. Everything is a transform on an
+// already-composited layer, so a pan costs the compositor and not layout.
+//
+// In the dial chamber the dial's own rate is deliberately tiny: hit testing resolves
+// against a fixed centre, so the visual may drift a few pixels from the geometry but no
+// further. Only three planes are driven per frame, because style recalc is the dominant
+// term in the drag cost and it scales with the number of elements touched.
+//
+// In the other rooms only the far plate moves. Their mechanisms are hit-tested in exact
+// stage coordinates, so they stay put.
+const view = { tx:0, ty:0, x:0, y:0, raf:null, dirty:false };
+const PLX = {
+  dial:  [[$('chamber'), 'scale(1.06) ', -16, -10], [$('nearplane'), '', 30, 19], [dialEl, '', 9, 6]],
+  pipes: [[document.querySelector('#sc-pipes .plate-bg'), '', -18, -10]],
+  water: [[document.querySelector('#sc-water .plate-bg'), '', -26, -8], [$('courtFloor'), '', 18, 8]],
+  hall:  [[document.querySelector('#sc-hall .plate-bg'), '', -20, -12]],
+};
+function pump(){
+  view.raf = null;
+  // ease toward the pointer so the room drifts rather than snaps
+  const nx = view.x + (view.tx - view.x) * 0.14;
+  const ny = view.y + (view.ty - view.y) * 0.14;
+  const moved = Math.abs(nx - view.x) > 0.0004 || Math.abs(ny - view.y) > 0.0004;
+  if (moved){
+    view.x = nx; view.y = ny;
+    for (const [el, pre, px, py] of PLX[S.scene])
+      el.style.transform = pre + `translate3d(${(view.x*px).toFixed(2)}px,${(view.y*py).toFixed(2)}px,0)`;
+  }
+  if (view.dirty && drag){ applyRing(drag.r); view.dirty = false; }
+  S.frames++;
+  if (moved || (view.dirty && drag)) schedule();
+}
+function schedule(){ if (!view.raf) view.raf = requestAnimationFrame(pump); }
+
+// ================================================================ scene 2: the pipe room
+// A 4x4 board of pipe tiles between the bellows and the organ. The route is carved first
+// and the board is scrambled around it, so every session is solvable by construction.
+const N=0, E=1, SO=2, W=3;
+const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
+const rotMask = m => ((m << 1) | (m >> 3)) & 15;
+const rotBy = (m, k) => { for (let i = 0; i < (k & 3); i++) m = rotMask(m); return m; };
+const TYPES = { straight:0b0101, corner:0b0011, tee:0b0111 };
+const TILE = 124, GAP = 4, BOARD_X = 520 + 26, BOARD_Y = 206 + 26;
+const tileXY = (r, c) => ({ x: BOARD_X + c*(TILE+GAP) + TILE/2, y: BOARD_Y + r*(TILE+GAP) + TILE/2 });
+
+const P = (() => {
+  const rin = (rng()*4)|0, rout = (rng()*4)|0;
+  // a route of 7 to 10 tiles leaves six or more decoys on the board to misread
+  let path = null, budget = 20000, maxLen = 10;
+  const seen = new Set();
+  (function dfs(r, c, acc){
+    if (path || --budget < 0 || acc.length > maxLen) return;
+    if (r === rout && c === 3 && acc.length >= 7){ path = acc.slice(); return; }
+    for (const d of shuffle([N, E, SO, W])){
+      const nr = r + DY[d], nc = c + DX[d], key = nr*4 + nc;
+      if (nr < 0 || nr > 3 || nc < 0 || nc > 3 || seen.has(key)) continue;
+      seen.add(key); acc.push([nr, nc]); dfs(nr, nc, acc); acc.pop(); seen.delete(key);
+    }
+  })(rin, 0, (seen.add(rin*4), [[rin, 0]]));
+  if (!path){ // never expected on a 4x4 board, but a route must always exist
+    path = [[rin,0],[rin,1],[rin,2],[rin,3]];
+    for (let r = rin; r !== rout; ) { r += Math.sign(rout - r); path.push([r, 3]); }
+  }
+  const tiles = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) tiles.push({ r, c, type:null, k:0, turns:0, need:0 });
+  const at = (r, c) => tiles[r*4 + c];
+  const dirTo = (a, b) => b[0] < a[0] ? N : b[1] > a[1] ? E : b[0] > a[0] ? SO : W;
+  path.forEach((cell, i) => {
+    const inD = i === 0 ? W : dirTo(cell, path[i-1]);
+    const outD = i === path.length - 1 ? E : dirTo(cell, path[i+1]);
+    const t = at(cell[0], cell[1]);
+    t.need = (1 << inD) | (1 << outD);
+    t.type = (inD + 2) % 4 === outD ? 'straight' : 'corner';
+  });
+  for (const t of tiles) if (!t.type){ const x = rng(); t.type = x < .4 ? 'straight' : x < .75 ? 'corner' : 'tee'; }
+  for (const t of tiles){ t.k = (rng()*4)|0; t.turns = t.k; }
+  return { rin, rout, path, tiles, at, lit:new Set() };
+})();
+
+function tileMask(t){ return rotBy(TYPES[t.type], t.k); }
+function pipeFlood(){
+  const lit = new Set(), q = [];
+  const src = P.at(P.rin, 0);
+  if (tileMask(src) & (1 << W)){ lit.add(src); q.push(src); }
+  while (q.length){
+    const t = q.shift(), m = tileMask(t);
+    for (let d = 0; d < 4; d++){
+      if (!(m & (1 << d))) continue;
+      const nr = t.r + DY[d], nc = t.c + DX[d];
+      if (nr < 0 || nr > 3 || nc < 0 || nc > 3) continue;
+      const n = P.at(nr, nc);
+      if (lit.has(n) || !(tileMask(n) & (1 << ((d + 2) % 4)))) continue;
+      lit.add(n); q.push(n);
+    }
+  }
+  const sink = P.at(P.rout, 3);
+  return { lit, ok: lit.has(sink) && !!(tileMask(sink) & (1 << E)) };
+}
+// never start solved
+while (pipeFlood().ok){ const t = P.at(P.path[1][0], P.path[1][1]); t.k = (t.k + 1) & 3; t.turns++; }
+
+// pipe art: three stacked strokes read as a round brass tube, flanged where it meets the
+// tile edge. Drawn in the type's base orientation; the tile rotor turns it.
+function pipeSVG(type){
+  const m = TYPES[type];
+  const seg = [];
+  if (type === 'straight') seg.push('M64 0V128');
+  if (type === 'corner') seg.push('M64 0V34A30 30 0 0 0 94 64H128');
+  if (type === 'tee') seg.push('M64 0V128', 'M64 64H128');
+  const d = seg.join(' ');
+  const fl = [];
+  for (let k = 0; k < 4; k++) if (m & (1 << k)){
+    const [x, y, w, h] = [[40, 0, 48, 12], [116, 40, 12, 48], [40, 116, 48, 12], [0, 40, 12, 48]][k];
+    fl.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="url(#pf)" stroke="#2a1b08" stroke-width="1.5"/>`);
+  }
+  const joint = type !== 'straight' ? `<circle cx="64" cy="64" r="${type === 'tee' ? 22 : 0}" fill="url(#pj)"/>` : '';
+  return `<svg viewBox="0 0 128 128">
+    <path d="${d}" fill="none" stroke="#1f1405" stroke-width="40"/>
+    <path d="${d}" fill="none" stroke="#8a6328" stroke-width="34"/>
+    <path d="${d}" fill="none" stroke="#c89b4a" stroke-width="22"/>
+    <path d="${d}" fill="none" stroke="#f3d99c" stroke-width="7" opacity=".75"/>
+    ${joint}${fl.join('')}
+    <g class="flow"><path d="${d}"/></g></svg>`;
+}
+const board = $('pipeBoard');
+board.insertAdjacentHTML('beforebegin', `<svg width="0" height="0" style="position:absolute"><defs>
+  <linearGradient id="pf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f6dfa6"/><stop offset=".5" stop-color="#a47a36"/><stop offset="1" stop-color="#4a3412"/></linearGradient>
+  <radialGradient id="pj" cx=".38" cy=".32"><stop offset="0" stop-color="#fbe6b4"/><stop offset=".5" stop-color="#b88d44"/><stop offset="1" stop-color="#3a270c"/></radialGradient>
+</defs></svg>`);
+for (const t of P.tiles){
+  const el = document.createElement('div');
+  el.className = 'tile';
+  const { x, y } = tileXY(t.r, t.c);
+  el.style.left = (x - TILE/2 - 520) + 'px'; el.style.top = (y - TILE/2 - 206) + 'px';
+  el.innerHTML = `<div class="rot">${pipeSVG(t.type)}</div>`;
+  t.el = el; t.rotEl = el.firstChild;
+  t.rotEl.style.transform = `rotate(${t.turns*90}deg)`;
+  board.appendChild(el);
+}
+
+// the fixed route: bellows to the board, board to the organ's wind chest
+(() => {
+  const yin = tileXY(P.rin, 0).y, yout = tileXY(P.rout, 3).y;
+  const inD = `M410 640H486V${yin}H546`;
+  const outD = `M1054 ${yout}H1086V716H1116`;
+  const tube = d => `<path d="${d}" fill="none" stroke="#1f1405" stroke-width="40" stroke-linejoin="round"/>
+    <path d="${d}" fill="none" stroke="#8a6328" stroke-width="34" stroke-linejoin="round"/>
+    <path d="${d}" fill="none" stroke="#c89b4a" stroke-width="22" stroke-linejoin="round"/>
+    <path d="${d}" fill="none" stroke="#f3d99c" stroke-width="7" opacity=".7" stroke-linejoin="round"/>
+    <path class="air" d="${d}" fill="none" stroke="#8ff0dc" stroke-width="8" stroke-dasharray="10 22"
+      style="animation:flowdash .8s linear infinite;filter:drop-shadow(0 0 5px #4fd1b5)"/>`;
+  $('pipeRoute').innerHTML = tube(inD) + tube(outD);
+})();
+
+// the bellows
+$('bellows').innerHTML = `<svg viewBox="0 0 300 300" style="width:100%;height:100%;overflow:visible">
+  <defs><linearGradient id="bw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a4f28"/><stop offset=".5" stop-color="#4a2c14"/><stop offset="1" stop-color="#26150a"/></linearGradient>
+  <linearGradient id="bl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a3a24"/><stop offset=".5" stop-color="#2e1c10"/><stop offset="1" stop-color="#4a3020"/></linearGradient></defs>
+  <ellipse cx="150" cy="286" rx="150" ry="16" fill="rgba(0,0,0,.55)"/>
+  <rect x="34" y="200" width="16" height="86" fill="#2a1a0c"/><rect x="214" y="200" width="16" height="86" fill="#2a1a0c"/><rect x="26" y="196" width="214" height="10" rx="3" fill="#3a2410"/>
+  <path d="M250 170 L292 160 L292 180 Z" fill="#b88d44" stroke="#3a270c" stroke-width="2"/>
+</svg>
+<div class="lung"><svg viewBox="0 0 230 170" preserveAspectRatio="none" style="width:100%;height:100%">
+  <path d="M0 10 L230 70 L230 100 L0 160 Z" fill="url(#bl)"/>
+  ${[0,1,2,3,4].map(i=>`<path d="M${20+i*40} ${15+i*11} L${20+i*40} ${155-i*11}" stroke="#1a0f06" stroke-width="3"/>`).join('')}
+  <rect x="0" y="0" width="230" height="16" rx="4" fill="url(#bw)" transform="rotate(15 0 8)"/>
+  <rect x="0" y="154" width="230" height="16" rx="4" fill="url(#bw)" transform="rotate(-15 0 162)"/>
+</svg></div>`;
+$('bellows').querySelector('svg').style.position = 'absolute';
+
+// the organ rank
+(() => {
+  const H = [270, 330, 390, 440, 490, 530, 490, 440, 390, 330, 270];
+  const host = document.querySelector('#organ .pipes');
+  host.style.cssText = 'position:absolute;inset:0';
+  H.forEach((h, i) => {
+    const p = document.createElement('div'); p.className = 'opipe';
+    p.style.left = (14 + i*28.5) + 'px'; p.style.height = h + 'px';
+    host.appendChild(p);
+  });
+})();
+
+function pipeRender(){
+  const { lit, ok } = pipeFlood();
+  for (const t of P.tiles) t.el.classList.toggle('lit', lit.has(t) && ok);
+  return ok;
+}
+function pipeTap(p){
+  if (S.done) return false;
+  for (const t of P.tiles){
+    const { x, y } = tileXY(t.r, t.c);
+    if (Math.abs(p.x - x) <= TILE/2 + GAP/2 && Math.abs(p.y - y) <= TILE/2 + GAP/2){
+      t.k = (t.k + 1) & 3; t.turns++;
+      t.rotEl.style.transform = `rotate(${t.turns*90}deg)`;
+      sfxClink();
+      const ok = pipeRender();
+      if (ok && !S.solved.pipes){ solve('pipes'); organOn(); }
+      else if (!ok && S.solved.pipes && !S.done){ unsolve('pipes'); }
+      return true;
+    }
+  }
+  return false;
+}
+
+// ================================================================ scene 3: the water clock court
+// Flow = 40 + (right - left) x 1.2, clamped 0 to 100. Hold the hand in the pale arc for
+// a second and a half and the clock keeps time.
+const WZ = { lo:68, hi:74 };
+const WEIGHTS = [
+  { id:'w5',  mass:5,  w:62,  h:74,  pips:1 },
+  { id:'w10', mass:10, w:74,  h:86,  pips:2 },
+  { id:'w15', mass:15, w:86,  h:98,  pips:3 },
+  { id:'w25', mass:25, w:102, h:116, pips:5 },
+];
+const SHELF_Y = 792, PIVOT = { x:800, y:470 }, ARM = 330, CHAIN = 150;
+const Wt = { flow:40, needle:40, tilt:0, holdMs:0, raf:null, last:0, drag:null, bubbles:[] };
+WEIGHTS.forEach((w, i) => { w.where = 'shelf'; w.shelfX = 612 + [0, 86, 186, 300][i] + w.w/2; });
+
+function weightSVG(w){
+  const pip = Array.from({ length:w.pips }, (_, i) => {
+    const cx = w.w/2 + (i - (w.pips - 1)/2) * 11;
+    return `<circle cx="${cx}" cy="${w.h*.66}" r="3.2" fill="#2a1a08" stroke="#f3d99c" stroke-width="1"/>`;
+  }).join('');
+  const bw = w.w, bh = w.h;
+  return `<svg viewBox="0 0 ${bw} ${bh}">
+    <defs><linearGradient id="g${w.id}" x1="0" x2="1"><stop offset="0" stop-color="#2c1d08"/><stop offset=".25" stop-color="#a47a36"/>
+      <stop offset=".42" stop-color="#f6dfa6"/><stop offset=".6" stop-color="#b88d44"/><stop offset="1" stop-color="#2a1a06"/></linearGradient></defs>
+    <circle cx="${bw/2}" cy="10" r="8" fill="none" stroke="url(#g${w.id})" stroke-width="5"/>
+    <path d="M${bw*.36} 18 H${bw*.64} L${bw*.72} ${bh*.34} Q${bw} ${bh*.42} ${bw*.96} ${bh-6} Q${bw/2} ${bh+4} ${bw*.04} ${bh-6} Q0 ${bh*.42} ${bw*.28} ${bh*.34} Z"
+      fill="url(#g${w.id})" stroke="#1e1305" stroke-width="2"/>
+    <ellipse cx="${bw/2}" cy="${bh-7}" rx="${bw*.44}" ry="5" fill="rgba(0,0,0,.25)"/>${pip}</svg>`;
+}
+const weightsHost = $('weights');
+for (const w of WEIGHTS){
+  const el = document.createElement('div');
+  el.className = 'weight'; el.style.width = w.w + 'px'; el.style.height = w.h + 'px';
+  el.innerHTML = weightSVG(w); w.el = el; weightsHost.appendChild(el);
+}
+const panSVG = `<svg viewBox="0 0 300 190">
+  <defs><linearGradient id="pd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3d69a"/><stop offset=".4" stop-color="#b88d44"/><stop offset="1" stop-color="#3a270c"/></linearGradient></defs>
+  <path d="M150 0 L20 160 M150 0 L280 160" stroke="#6d4d1d" stroke-width="3" stroke-dasharray="6 3"/>
+  <circle cx="150" cy="4" r="7" fill="none" stroke="#b88d44" stroke-width="4"/>
+  <path d="M6 158 H294 Q284 186 150 188 Q16 186 6 158 Z" fill="url(#pd)" stroke="#2a1b08" stroke-width="2"/>
+  <ellipse cx="150" cy="159" rx="144" ry="6" fill="#4a3412"/></svg>`;
+$('panL').innerHTML = panSVG; $('panR').innerHTML = panSVG;
+
+// gauge: 0 to 100 across 270 degrees, the pale arc marks the goal
+const G_A0 = -135, G_A1 = 135, GR = 118;
+const gAng = v => G_A0 + (G_A1 - G_A0) * v / 100;
+function polar(cx, cy, r, deg){ const a = (deg - 90) * Math.PI/180; return [cx + r*Math.cos(a), cy + r*Math.sin(a)]; }
+(() => {
+  const arc = (a0, a1, r) => { const [x0,y0] = polar(200,200,r,a0), [x1,y1] = polar(200,200,r,a1);
+    return `M${x0} ${y0}A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}`; };
+  let ticks = '';
+  for (let v = 0; v <= 100; v += 10){ const [x0,y0] = polar(200,200,GR-8,gAng(v)), [x1,y1] = polar(200,200,GR+8,gAng(v));
+    ticks += `<line class="tick" x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}"/>`; }
+  $('gauge').innerHTML = `
+    <path d="${arc(G_A0, G_A1, GR)}" stroke="rgba(242,200,140,.25)" stroke-width="3" fill="none"/>
+    ${ticks}
+    <path class="zone" d="${arc(gAng(WZ.lo), gAng(WZ.hi), GR)}"/>
+    <g id="needle"><path d="M196 214 L200 88 L204 214 Z" fill="#e8c27a" stroke="#3a270c" stroke-width="1.5"/>
+      <path d="M198 214 L200 240 L202 214 Z" fill="#b88d44"/></g>`;
+})();
+
+function sums(){ let L = 0, R = 0; for (const w of WEIGHTS){ if (w.where === 'L') L += w.mass; if (w.where === 'R') R += w.mass; } return { L, R }; }
+function flowTarget(){ const { L, R } = sums(); return Math.max(0, Math.min(100, 40 + (R - L) * 1.2)); }
+function panPos(side){
+  const s = side === 'L' ? -1 : 1, a = Wt.tilt * Math.PI/180;
+  return { x: PIVOT.x + s*ARM*Math.cos(a), y: PIVOT.y + s*ARM*Math.sin(a) };
+}
+function layoutWeights(){
+  const pans = { L: panPos('L'), R: panPos('R') };
+  $('panL').style.left = pans.L.x + 'px'; $('panL').style.top = (pans.L.y - 4) + 'px';
+  $('panR').style.left = pans.R.x + 'px'; $('panR').style.top = (pans.R.y - 4) + 'px';
+  $('beam').style.transform = `rotate(${Wt.tilt}deg)`;
+  for (const side of ['L', 'R']){
+    const on = WEIGHTS.filter(w => w.where === side && w !== Wt.drag?.w);
+    const total = on.reduce((a, w) => a + w.w, 0) + Math.max(0, on.length - 1) * 4;
+    let x = pans[side].x - total/2;
+    for (const w of on){ w.x = x + w.w/2; w.y = pans[side].y + CHAIN + 4 - w.h/2; x += w.w + 4; }
+  }
+  for (const w of WEIGHTS){
+    if (w.where === 'shelf' && w !== Wt.drag?.w){ w.x = w.shelfX; w.y = SHELF_Y - w.h/2 + 2; }
+    w.el.style.transform = `translate3d(${(w.x - w.w/2).toFixed(1)}px,${(w.y - w.h/2).toFixed(1)}px,0)`;
+  }
+}
+const colCanvas = document.querySelector('#column canvas'), colCtx = colCanvas.getContext('2d');
+for (let i = 0; i < 18; i++) Wt.bubbles.push({ x: 20 + Math.random()*72, y: Math.random()*704, r: 2 + Math.random()*5 });
+
+function waterTick(now){
+  Wt.raf = null;
+  const dt = Math.min(64, now - (Wt.last || now)); Wt.last = now;
+  // the hand chases the flow at no more than 90 degrees a second, never a teleport
+  const target = flowTarget();
+  const maxStep = (90 / 270) * 100 * dt / 1000;
+  const dv = target - Wt.needle;
+  Wt.needle += Math.abs(dv) <= maxStep ? dv : Math.sign(dv) * maxStep;
+  const { L, R } = sums();
+  const tiltT = Math.max(-12, Math.min(12, (R - L) * 0.32));
+  Wt.tilt += (tiltT - Wt.tilt) * Math.min(1, dt / 140);
+  $('needle').setAttribute('transform', `rotate(${gAng(Wt.needle).toFixed(2)} 200 200)`);
+  layoutWeights();
+  // the hold rule: rest inside the arc for 1.5s
+  const inZone = Wt.needle >= WZ.lo && Wt.needle <= WZ.hi && !Wt.drag;
+  if (!S.solved.water){
+    Wt.holdMs = inZone ? Wt.holdMs + dt : 0;
+    if (Wt.holdMs >= 1500){ sfxChimes(); solve('water'); }
+  } else if (!inZone && !S.done){
+    unsolve('water'); Wt.holdMs = 0;
+  }
+  // the glass column: the faster the flow, the faster it rises; locked, it breathes
+  const calm = S.solved.water;
+  const speed = calm ? 0.35 : 0.2 + Wt.needle / 100 * 3.2;
+  const c = colCtx; c.clearRect(0, 0, 112, 704);
+  const lvl = 704 * (1 - (0.35 + Wt.needle / 100 * 0.6));
+  const grd = c.createLinearGradient(0, lvl, 0, 704);
+  grd.addColorStop(0, calm ? 'rgba(98,212,184,.85)' : 'rgba(169,216,212,.7)'); grd.addColorStop(1, 'rgba(20,60,70,.9)');
+  c.fillStyle = grd; c.fillRect(0, lvl, 112, 704 - lvl);
+  c.fillStyle = 'rgba(230,255,250,.9)'; c.fillRect(0, lvl, 112, 3);
+  c.fillStyle = 'rgba(220,250,245,.55)';
+  for (const b of Wt.bubbles){
+    b.y -= speed * dt * (0.06 + b.r * 0.01) * 3;
+    if (b.y < lvl) { b.y = 704; b.x = 20 + Math.random()*72; }
+    c.beginPath(); c.arc(b.x, b.y, b.r, 0, 7); c.fill();
+  }
+  // the court's gears turn with the water
+  const spin = (now / 1000) * (calm ? 14 : 4 + Wt.needle * .5);
+  $('cgA').style.transform = `rotate(${spin}deg)`; $('cgB').style.transform = `rotate(${-spin*1.3}deg)`;
+  if (S.scene === 'water' || Wt.drag) Wt.raf = requestAnimationFrame(waterTick);
+}
+function waterWake(){ if (!Wt.raf){ Wt.last = 0; Wt.raf = requestAnimationFrame(waterTick); } }
+layoutWeights();
+
+function hitWeight(p){
+  // generous grab: at least 50px around every weight, because thumbs are not cursors
+  let best = null, bd = 1e9;
+  for (const w of WEIGHTS){
+    const d = Math.hypot(p.x - w.x, p.y - w.y);
+    if (d < Math.max(56, w.w * .65) && d < bd){ best = w; bd = d; }
+  }
+  return best;
+}
+function waterDown(p){
+  if (S.done) return false;
+  const w = hitWeight(p);
+  if (!w) return false;
+  Wt.drag = { w, dx: w.x - p.x, dy: w.y - p.y, x0: p.x, y0: p.y, moved: 0, from: w.where };
+  w.el.classList.add('held'); weightsHost.appendChild(w.el);
+  waterWake();
+  return true;
+}
+function waterMove(p){
+  const d = Wt.drag; if (!d) return;
+  d.moved = Math.max(d.moved, Math.hypot(p.x - d.x0, p.y - d.y0));
+  d.w.x = p.x + d.dx; d.w.y = p.y + d.dy;
+}
+function waterUp(p){
+  const d = Wt.drag; if (!d) return;
+  const w = d.w; Wt.drag = null; w.el.classList.remove('held');
+  let dest = 'shelf';
+  if (d.moved < 8){
+    // a tap: a weight on a pan goes home, a weight on the shelf goes to the right pan
+    dest = d.from === 'shelf' ? 'R' : 'shelf';
+  } else {
+    for (const side of ['L', 'R']){
+      const pp = panPos(side);
+      if (Math.abs(w.x - pp.x) < 190 && w.y > pp.y + 40 && w.y < pp.y + CHAIN + 110) dest = side;
+    }
+  }
+  w.where = dest;
+  dest === 'shelf' ? sfxDrop() : (sfxClink(), sfxDrop());
+  waterWake();
+}
+
+// ================================================================ scene 4: the keystone hall
+const LAMPS = [
+  { key:'dial',  x:420,  y:330 },
+  { key:'pipes', x:800,  y:92 },
+  { key:'water', x:1180, y:330 },
+];
+const lampsHost = $('lamps');
+for (const L of LAMPS){
+  const el = document.createElement('div');
+  el.className = 'lamp'; el.style.left = L.x + 'px'; el.style.top = L.y + 'px';
+  el.style.setProperty('--c', COLOR[L.key]);
+  const bx = 800 - L.x, by = 390 - L.y, len = Math.hypot(bx, by), ang = Math.atan2(by, bx) * 180/Math.PI;
+  el.innerHTML = `<div class="chain"></div><div class="beam" style="transform:rotate(${ang}deg)"></div>
+    <div class="cage"></div><div class="glass"><div class="gl"></div></div>`;
+  el.querySelector('.beam').dataset.len = len;
+  L.el = el; lampsHost.appendChild(el);
+}
+const KEYS = KEY_ORDER.map((name, i) => ({ name, x: 394 + i*116, y: 752 }));
+const keysHost = $('keys');
+for (const k of KEYS){
+  const el = document.createElement('div');
+  el.className = 'kkey'; el.style.left = k.x + 'px'; el.style.top = k.y + 'px';
+  el.innerHTML = `<div class="gl">${svg(k.name)}</div>`;
+  k.el = el; keysHost.appendChild(el);
+}
+const hallAwake = () => S.solved.dial && S.solved.pipes && S.solved.water;
+function hallRender(){
+  LAMPS.forEach(L => L.el.classList.toggle('lit', S.solved[L.key]));
+  keysHost.classList.toggle('awake', hallAwake());
+}
+function hallReset(){
+  S.hall.progress = 0;
+  KEYS.forEach(k => { k.el.classList.remove('set'); k.el.style.removeProperty('--c'); });
+  LAMPS.forEach(L => { L.el.classList.remove('told'); L.el.querySelector('.gl').innerHTML = ''; });
+}
+function hallTap(p){
+  if (S.done) return false;
+  const k = KEYS.find(k => Math.hypot(p.x - k.x, p.y - k.y) < 56);
+  if (!k) return false;
+  k.el.classList.add('down'); setTimeout(() => k.el.classList.remove('down'), 140);
+  if (!hallAwake()){
+    sfxDeny(); keysHost.classList.remove('shake'); void keysHost.offsetWidth; keysHost.classList.add('shake');
+    return true;
+  }
+  const i = S.hall.progress, want = SEALS[LAMPS[i].key];
+  if (k.name === want && !k.el.classList.contains('set')){
+    const L = LAMPS[i];
+    k.el.style.setProperty('--c', COLOR[L.key]); k.el.classList.add('set');
+    L.el.querySelector('.gl').innerHTML = svg(k.name); L.el.classList.add('told');
+    sfxKey(i);
+    S.hall.progress++;
+    if (S.hall.progress === 3) finale();
+  } else {
+    sfxDeny();
+    keysHost.classList.remove('shake'); void keysHost.offsetWidth; keysHost.classList.add('shake');
+    hallReset();
+  }
+  return true;
+}
+
+// ================================================================ solving, globally
+function solve(k){
+  S.solved[k] = true;
+  sceneEl(k).classList.add('solved');
+  if (k === 'dial') D.rings.forEach(r => r.el.classList.add('lit'));
+  $(({ dial:'sealDial', pipes:'sealPipes', water:'sealWater' })[k]).classList.add('lit');
+  if (!S.montage) banner(BANNER[k]);
+  hint('');
+  hallRender(); navRender();
+  window.dispatchEvent(new CustomEvent('amd:solved', { detail:{ scene:k, seal:SEALS[k] } }));
+}
+function unsolve(k){
+  S.solved[k] = false;
+  sceneEl(k).classList.remove('solved');
+  $(({ dial:'sealDial', pipes:'sealPipes', water:'sealWater' })[k]).classList.remove('lit');
+  if (k === 'pipes' && organ) organ.g.gain.setTargetAtTime(0, AC.currentTime, .12);
+  hallReset(); hallRender(); navRender();
+}
+
+// ================================================================ the finale
+function finaleSwell(){
+  if (!AC) return;
+  const t = AC.currentTime;
+  if (musicGain){ musicGain.gain.setTargetAtTime(.8, t, .6); musicGain.gain.setTargetAtTime(.5, t + 9, 2); }
+  if (organ){ organ.g.gain.setTargetAtTime(.16, t, .5); organ.g.gain.setTargetAtTime(organTarget(), t + 9, 2); }
+  sfxClunk();
+  [261.63, 329.63, 392, 523.25, 659.25, 783.99].forEach((f, i) => { tone(f, 4.2, 'sine', .06, .3 + i*.12); tone(f/2, 4.5, 'triangle', .025, .3 + i*.12); });
+  setTimeout(sfxChimes, 1200);
+  [0, 1.2, 2.4].forEach(d => tone(98, 1.5, 'sine', .12, 2.2 + d));
+}
+function finale(){
+  S.done = true;
+  const hall = $('sc-hall');
+  hall.classList.add('sing');
+  LAMPS.forEach(L => { const b = L.el.querySelector('.beam'); b.style.width = (+b.dataset.len) + 'px'; });
+  finaleSwell();
+  const f = $('flash');
+  f.animate([{ opacity:0 }, { opacity:.55 }, { opacity:0 }], { duration:1600, easing:'ease-out' });
+  banner('The machine sings', 5200);
+  // the cross-cut: every machine on the island, answering at once
+  S.montage = true;
+  const seq = ['dial', 'pipes', 'water', 'hall'];
+  let t = 2600;
+  seq.forEach((k, i) => { setTimeout(() => goto(k, true), t); t += i === 3 ? 0 : 1700; });
+  setTimeout(() => { S.montage = false; navRender(); $('card').classList.add('show'); }, t + 1800);
+  window.dispatchEvent(new CustomEvent('amd:finale'));
+}
+
+// ================================================================ navigation
+const HINTS = {
+  dial:  'turn each ring until its mark meets the notch',
+  pipes: 'tap a pipe to turn it',
+  water: 'hang the weights until the hand rests in the pale arc',
+  hall:  '',
+};
+function goto(k, force){
+  if (!force && (S.montage || k === S.scene)) return;
+  const from = S.scene;
+  sceneEl(from).classList.remove('on');
+  sceneEl(k).classList.add('on');
+  S.scene = k; stage.dataset.scene = k;
+  if (!S.montage){ clearTimeout(bannerT); $('banner').classList.remove('show'); }
+  if (drag){ dialUp(); }
+  if (Wt.drag){ Wt.drag.w.where = Wt.drag.from; Wt.drag.w.el.classList.remove('held'); Wt.drag = null; }
+  view.x = view.y = 0; view.tx = view.ty = 0;
+  for (const [el, pre] of PLX[k]) el.style.transform = pre;
+  if (k === 'water') waterWake();
+  mixBeds();
+  navRender();
+  if (!S.montage && S.started && !S.visited[k]){
+    S.visited[k] = true;
+    const h = k === 'hall' ? (hallAwake() ? '' : 'the hall waits for three lights') : HINTS[k];
+    if (h && !(k !== 'hall' && S.solved[k])) setTimeout(() => S.scene === k && hint(h), 900);
+  } else hint('');
+  if (k === 'hall') hallRender();
+}
+function navRender(){
+  const i = SCENES.indexOf(S.scene);
+  const hide = !S.started || S.montage;
+  $('navLeft').classList.toggle('hidden', hide || i === 0);
+  $('navRight').classList.toggle('hidden', hide || i === SCENES.length - 1);
+  $('navLeft').title = i > 0 ? SCENES[i-1] : '';
+  $('navRight').title = i < 3 ? SCENES[i+1] : '';
+  $('navHall').classList.toggle('hidden', hide || !hallAwake() || S.scene === 'hall' || S.done);
+  // the way on beckons once this room's machine is done
+  $('navRight').classList.toggle('beckon', !!S.solved[S.scene]);
+}
+function navBind(id, fn){
+  $(id).addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (S.started) fn(); });
+}
+navBind('navLeft',  () => goto(SCENES[Math.max(0, SCENES.indexOf(S.scene) - 1)]));
+navBind('navRight', () => goto(SCENES[Math.min(3, SCENES.indexOf(S.scene) + 1)]));
+navBind('navHall',  () => goto('hall'));
+document.querySelectorAll('#card button').forEach(b => b.addEventListener('pointerdown', e => {
+  e.stopPropagation(); e.preventDefault();
+  $('card').classList.remove('show'); goto(b.dataset.go);
+}));
+addEventListener('keydown', e => {
+  if (!S.started) return;
+  if (e.key === 'ArrowLeft') goto(SCENES[Math.max(0, SCENES.indexOf(S.scene) - 1)]);
+  if (e.key === 'ArrowRight') goto(SCENES[Math.min(3, SCENES.indexOf(S.scene) + 1)]);
+});
+
+// ================================================================ input, routed by room
+let active = null;
+stage.addEventListener('pointerdown', ev => {
+  if (!S.started){ begin(); return; }
+  if (S.montage || $('card').classList.contains('show')) return;
+  const p = stagePoint(ev);
+  let took = false;
+  if (S.scene === 'dial') took = dialDown(p, ev);
+  else if (S.scene === 'pipes') took = pipeTap(p);
+  else if (S.scene === 'water') took = waterDown(p);
+  else if (S.scene === 'hall') took = hallTap(p);
+  if (took){ active = S.scene; try { stage.setPointerCapture(ev.pointerId); } catch(e){} ev.preventDefault(); }
+});
+stage.addEventListener('pointermove', ev => {
+  const p = stagePoint(ev);
+  view.tx = (p.x/1600 - .5);
+  view.ty = (p.y/900 - .5);
+  if (active === 'dial') dialMove(p);
+  else if (active === 'water') waterMove(p);
+  schedule();
+}, { passive: true });
+function endPointer(ev){
+  if (active === 'dial') dialUp();
+  else if (active === 'water') waterUp(stagePoint(ev));
+  active = null;
+}
+stage.addEventListener('pointerup', endPointer);
+stage.addEventListener('pointercancel', endPointer);
+
+// ================================================================ boot
+const titleEl = $('title');
+function begin(){
+  if (S.started) return;
+  S.started = true;
+  titleEl.classList.add('gone');
+  startMusic();
+  S.visited.dial = true;
+  navRender();
+  setTimeout(()=> S.scene === 'dial' && !S.solved.dial && hint(HINTS.dial), 1400);
+}
+titleEl.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); begin(); });
+
+// fit the fixed stage into whatever viewport we get
+function fit(){
+  const s = Math.min(innerWidth/1600, innerHeight/900);
+  stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+}
+addEventListener('resize', fit); fit();
+sceneEl('dial').classList.add('on'); stage.dataset.scene = 'dial';
+pipeRender(); hallRender(); navRender();
+if (qs.has('scene') && SCENES.includes(qs.get('scene'))) goto(qs.get('scene'), true);
+
+// ================================================================ harness
+// Exposed for the capture harness and the playtest driver. A read-only view of truth,
+// plus the client-space geometry a real pointer needs. The playtest never calls the
+// solve helpers; they exist for captures and for debugging one room in isolation.
+window.__AMD__ = {
+  ready: true,
+  version: 2,
+  seed: SEED,
+  get started(){ return S.started; },
+  state(){
+    return {
+      scene:S.scene, started:S.started, done:S.done, montage:S.montage,
+      solved:{ ...S.solved }, seals:{ ...SEALS },
+      card: $('card').classList.contains('show'),
+      dial:{ solved:S.solved.dial, target:TARGET, rings:D.rings.map(r => ({
+        id:r.cfg.id, rot:+r.rot.toFixed(3), seg:segOf(r), keySeg:r.keySeg,
+        atNotch:+atNotch(r).toFixed(3), solved:ringSolved(r) })) },
+      pipes:{ solved:S.solved.pipes, rin:P.rin, rout:P.rout,
+        path:P.path.map(([r, c]) => ({ r, c, need:P.at(r, c).need })),
+        tiles:P.tiles.map(t => ({ r:t.r, c:t.c, type:t.type, k:t.k, mask:tileMask(t) })) },
+      water:{ solved:S.solved.water, flow:+flowTarget().toFixed(2), needle:+Wt.needle.toFixed(2),
+        zone:{ ...WZ }, holdMs:Math.round(Wt.holdMs),
+        weights:WEIGHTS.map(w => ({ id:w.id, mass:w.mass, where:w.where })) },
+      hall:{ awake:hallAwake(), progress:S.hall.progress, keys:KEYS.map(k => k.name),
+        order:LAMPS.map(L => SEALS[L.key]) },
+    };
+  },
+  probe(){
+    const b = stage.getBoundingClientRect(), s = b.width/1600;
+    const nav = id => { const r = $(id).getBoundingClientRect();
+      return $(id).classList.contains('hidden') ? null : { x:r.left + r.width/2, y:r.top + r.height/2 }; };
+    return {
+      scale:s,
+      nav:{ left:nav('navLeft'), right:nav('navRight'), hall:nav('navHall') },
+      center:toClient(800, DIAL_Y),
+      rings:D.rings.map(r => ({ id:r.cfg.id, grabRadius:((r.cfg.inner + r.cfg.outer)/2)*s,
+        innerR:r.cfg.inner*s, outerR:r.cfg.outer*s })),
+      tiles:P.tiles.map(t => ({ r:t.r, c:t.c, ...toClient(tileXY(t.r, t.c).x, tileXY(t.r, t.c).y) })),
+      weights:WEIGHTS.map(w => ({ id:w.id, mass:w.mass, where:w.where, ...toClient(w.x, w.y) })),
+      pans:{ L:(pp => toClient(pp.x, pp.y + CHAIN - 10))(panPos('L')), R:(pp => toClient(pp.x, pp.y + CHAIN - 10))(panPos('R')),
+        shelf:toClient(800, SHELF_Y - 40) },
+      keys:KEYS.map(k => ({ name:k.name, ...toClient(k.x, k.y) })),
+      card:[...document.querySelectorAll('#card button')].map(b => { const r = b.getBoundingClientRect();
+        return { go:b.dataset.go, x:r.left + r.width/2, y:r.top + r.height/2 }; }),
+    };
+  },
+  begin, goto:k => goto(k, true),
+  // debug only
+  setRing(i, seg){ const r=D.rings[i]; r.rot=norm(seg*STEP); applyRing(r); dialCheck(); },
+  solve(k){
+    if (k === 'dial'){ D.rings.forEach(r=>{ r.rot=norm(-r.keySeg*STEP); applyRing(r); }); dialCheck(); }
+    if (k === 'pipes'){ for (const c of P.path){ const t = P.at(c[0], c[1]);
+        while ((tileMask(t) & t.need) !== t.need){ t.k = (t.k+1)&3; t.turns++; }
+        t.rotEl.style.transform = `rotate(${t.turns*90}deg)`; }
+      if (pipeRender() && !S.solved.pipes){ solve('pipes'); organOn(); } }
+    if (k === 'water'){ WEIGHTS.forEach(w => w.where = w.mass === 25 ? 'R' : 'shelf'); Wt.needle = 71; solve('water'); waterWake(); }
+  },
+};
+})();
+
+</script>
+</body>
+</html>
