@@ -3,6 +3,8 @@
 ## Music
 "ah mah day us" by The Deluxxe, from The Game Album. 0:50, seamless loop.
 
+"everybodies ok with the sunshine" by Kevin Sotka (work in progress), 2:40, loops on the island.
+
 ## Imagery
 All photographic source licensed from Adobe Stock. Every asset below was licensed, cut, and
 colour graded to the island palette before use. Adobe Stock IDs are recorded so any asset can

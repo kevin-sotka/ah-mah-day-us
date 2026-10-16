@@ -66,6 +66,10 @@ longer and it sits down to watch. Crabs bury themselves when you get close, gull
 the jetty posts, butterflies rise out of the flowers, fish scatter from your feet, and a
 turtle paddles slow circles offshore, paying you no attention at all.
 
+Outside, the album gives way to "everybodies ok with the sunshine" (`assets/island/sunshine.mp3`),
+which fades in as the island appears, swells a little while the automaton watches the sun, and
+hands back to the album when you leave.
+
 It is a Three.js scene in `assets/island/`, imported only when you step outside, so the
 four rooms load exactly as before. Three.js is vendored in `assets/island/vendor/`, no
 CDN. Modules:
@@ -82,7 +86,7 @@ CDN. Modules:
 
 Touch devices get a lighter tier (fewer plants, smaller shadow map, no MSAA) and the
 renderer drops its pixel ratio once if the first seconds run under 40fps. The island adds
-about 6.4MB, loaded only on entry.
+about 9.6MB including its song, loaded only on entry.
 
 ## What it is made of
 

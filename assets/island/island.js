@@ -93,11 +93,13 @@ export async function start(opts) {
   const model = n => new Promise((res, rej) => gl.load(BASE + 'models/' + n, res, undefined, rej));
   const geos = g => { const out = []; g.scene.traverse(o => { if (o.isMesh) out.push(o.geometry); }); return out; };
   const [sand, sand_n, wetsand, grass, grass_n, path, rock, rock_n, brick, brick_n, blocks, slate, planks, fronds, fernTex, calTex, r07t, r09t, shellTex,
-    robot, fern, cal, r07, r09, shell] = await Promise.all([
+    robot, fern, cal, r07, r09, shell, songData] = await Promise.all([
     tex('sand.webp'), tex('sand_n.webp', false), tex('wetsand.webp'), tex('grass.webp'), tex('grass_n.webp', false), tex('path.webp'),
     tex('rock.webp'), tex('rock_n.webp', false), tex('brick.webp'), tex('brick_n.webp', false), tex('blocks.webp'), tex('slate.webp'), tex('planks.webp'),
     tex('fronds.webp', true, false), tex('fern.webp', true, false), tex('calathea.webp', true, false), tex('rock07.webp'), tex('rock09.webp'), tex('shell.webp'),
     model('automaton.glb'), model('fern.gltf'), model('calathea.gltf'), model('rock07.gltf'), model('rock09.gltf'), model('shell.gltf'),
+    // the island's own song; the island still works if it fails to load
+    fetch(BASE + 'sunshine.mp3').then(r => r.ok ? r.arrayBuffer() : null).catch(() => null),
   ]);
   for (const t of [r07t, r09t, shellTex]) t.flipY = false;
   const A = { sand, sand_n, wetsand, grass, grass_n, path, rock, rock_n, brick, brick_n, blocks, slate, planks, fronds, fernTex, calatheaTex: calTex,
@@ -151,6 +153,18 @@ export async function start(opts) {
   const post = lens(renderer, scene, camera, Q);
   const input = makeInput(rootEl, Q.touch);
   const snd = islandSound(opts.ctx, opts.master);
+
+  // "everybodies ok with the sunshine" takes over from the album while you are outside
+  let song = null;
+  if (opts.ctx && songData) {
+    try {
+      const buf = await opts.ctx.decodeAudioData(songData);
+      const src = opts.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      const gain = opts.ctx.createGain(); gain.gain.value = 0;
+      src.connect(gain); gain.connect(opts.master); src.start();
+      song = { src, gain };
+    } catch (e) { /* no song, the album stays */ }
+  }
 
   // UI: exit, control hint
   const exitEl = document.createElement('div'); exitEl.className = 'isl-exit'; exitEl.title = 'leave the island';
@@ -361,7 +375,12 @@ export async function start(opts) {
       const shoreD = Math.abs(H(player.x, player.z) - level);
       snd.update({ shore: Math.max(0, 1 - shoreD / 1.6) * 0.8 + 0.2 * Math.max(0, 1 - Math.abs(islandR(player.x, player.z) - 1) * 5), canopy: Math.min(1, touched * 0.3 + 0.3), level, gust: 0.5 + 0.5 * Math.sin(t * 0.61) * Math.sin(t * 0.23), gaze: g });
     }
-    { const mg = opts.music && opts.music.gain; if (mg && opts.ctx) mg.setTargetAtTime(exiting ? 0.5 : 0.26 + g * 0.22, opts.ctx.currentTime, 0.8); }
+    {
+      const mg = opts.music && opts.music.gain, now = opts.ctx && opts.ctx.currentTime;
+      // crossfade: the album out, the island song in, and back again on the way out
+      if (mg) mg.setTargetAtTime(exiting ? 0.5 : song ? 0 : 0.26 + g * 0.22, now, song ? 1.2 : 0.8);
+      if (song) song.gain.gain.setTargetAtTime(exiting ? 0 : 0.5 + g * 0.15, now, exiting ? 0.4 : 1.2);
+    }
     if (opts.organ) {
       const dh = Math.hypot(player.x - HALL.door.x, player.z - HALL.door.z);
       opts.organ(Math.max(0, 0.045 - dh * 0.0028) + pulse * 0.05);
@@ -387,6 +406,7 @@ export async function start(opts) {
     running = false; cancelAnimationFrame(raf);
     removeEventListener('resize', resize);
     input.dispose(); snd && snd.stop();
+    if (song) { const sg = song; sg.gain.gain.setTargetAtTime(0, opts.ctx.currentTime, 0.2); setTimeout(() => { try { sg.src.stop(); sg.gain.disconnect(); } catch (e) {} }, 1500); }
     if (opts.organ) opts.organ(-1);
     renderer.dispose(); post.composer.dispose && post.composer.dispose();
     scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
@@ -406,6 +426,7 @@ export async function start(opts) {
     leave,
     info: { renderer: () => renderer.info.render },
     debug: { scene, camera, A, cam, sun, renderer },
+    audio: () => ({ song: song ? +song.gain.gain.value.toFixed(3) : null, album: opts.music && opts.music.gain ? +opts.music.gain.value.toFixed(3) : null, ctx: opts.ctx ? opts.ctx.state : null }),
   };
   return { stop, leave };
 }
