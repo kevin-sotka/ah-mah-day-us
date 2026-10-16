@@ -121,4 +121,34 @@ This is a manipulation puzzle, not a dynamics simulation, so "physics" here mean
 
 ## v1 Scope vs [later]
 - [v1] All 4 scenes fully built and connected: Dial Chamber (3-ring alignment), Pipe Room (4x4 tile routing), Water Clock Court (weight-balance target), Keystone Hall (derived 3-symbol sequence lock), shared global state, screen-edge navigation, layered parallax + light shafts per scene, ambient SFX beds, full finale payoff, revisit-freely completion state.
-- [later] A fifth "observatory" scene adding a 4th mechanism and a richer finale combination, hint system for players stuck on a mechanism, alternate finale audio/visual variants unlocked by solving scenes in different orders, a photo-mode freeze-frame of the completed machine.
+- [shipped 2026-10-16] A fifth scene after all, but outdoors: see The Island below.
+- [later] An "observatory" scene adding a 4th mechanism and a richer finale combination, hint system for players stuck on a mechanism, alternate finale audio/visual variants unlocked by solving scenes in different orders, a photo-mode freeze-frame of the completed machine.
+
+## The Island (added 2026-10-16)
+
+The finale card says "the island is yours to wander." Now it is. **Step outside** opens a
+fifth scene: the whole island as a miniature, 3/4 top-down through a tilt-shift lens, at the
+same golden hour the rooms are graded to.
+
+- **Who you are:** a small brass automaton, woken when the machine sang. It starts on the
+  hall's apron, facing out, and waves.
+- **The hall:** the Keystone Hall from outside. Doors shut, amber light at every window and
+  in the seam of the door, the armillary turning on the dome. Walking into the doors knocks;
+  the machine's chord answers muffled from inside and the automaton shakes its head. It never
+  opens.
+- **Moving:** walk and run (analog on stick), jump, roll, kick. Wading slows you; deep water
+  stops you. The hall plinth and the jetty are steps you climb or jump onto.
+- **Trails:** narrow paths from the steps to the south beach, the west point and the east
+  cove jetty, with palm bushes and ferns crowding the edges. They part around you and shiver,
+  with a rustle and a few loose leaves.
+- **The shore:** the sea level breathes, so the swash climbs and slides back down the beach;
+  foam lace, wet sand that shines, footprints the waves take back. Kick the surf for spray and
+  rings.
+- **Stillness:** after three seconds the automaton turns to the sun and looks up, and the
+  camera cranes down behind it to look with it, flare and all. After fifteen it sits.
+- **Residents:** crabs, gulls, butterflies, fish, a turtle. All keep their distance.
+- **Borrowed from:** the tilt-shift diorama of Link's Awakening (2019), Tunic's low warm light
+  and long shadows, A Short Hike's sea and wind, Alba's wildlife that reacts to you, and the
+  Myst remake's habit of letting you simply stand and look.
+- **Stack:** Three.js r185, vendored, lazy-loaded. Photographed source (Adobe Stock fronds,
+  Poly Haven CC0 plants and grounds) on procedural forms, so it is not a purely coded look.

@@ -35,9 +35,54 @@ explain itself.
 4. **The Keystone Hall.** Three lamps, one per room, left to right in island order. Once
    all three are lit, tap the three seals' marks in lamp order. The machine sings.
 
+5. **The island.** When the machine sings, the card says the island is yours to wander.
+   **Step outside** and you are on it: a miniature of the whole island at golden hour, seen
+   from above like a model on a table. You are a small brass automaton the machine woke,
+   standing outside the Keystone Hall's shut doors. The hall stays shut; you can knock.
+
 The seals are drawn fresh every visit, so the answer has to be read, not remembered. Use the
 arrows at the screen edges to walk between rooms (arrow keys on a keyboard). Once all three
 machines run, the three lights in the top right corner take you straight to the hall.
+
+## The island
+
+Reached from the finale card (**Step outside**), or directly with `?scene=island` for
+testing (tap the title card once, for audio).
+
+| | Keyboard | Touch | Gamepad |
+|---|---|---|---|
+| Wander | WASD or arrows | drag anywhere on the left half | left stick |
+| Jump | Space | the big button | A |
+| Roll | Shift (or C) | the curled arrow | B |
+| Kick | E (or F, K) | the kick button | X or Y |
+| Zoom | mouse wheel | pinch | |
+| Leave | Esc or the x | the x | Start |
+
+Narrow trails run from the hall steps to the south beach, the rocky west point and the
+jetty in the east cove, under palms and through bushes that part and shiver as you push
+through them. Wade into the shallows; kick the surf. Stand still and the automaton turns
+to the sun and looks up, and the camera comes down behind it to look with it. Stand still
+longer and it sits down to watch. Crabs bury themselves when you get close, gulls lift off
+the jetty posts, butterflies rise out of the flowers, fish scatter from your feet, and a
+turtle paddles slow circles offshore, paying you no attention at all.
+
+It is a Three.js scene in `assets/island/`, imported only when you step outside, so the
+four rooms load exactly as before. Three.js is vendored in `assets/island/vendor/`, no
+CDN. Modules:
+
+- `island.js` entry, quality tier, loop, camera, events, UI, the `window.__ISLAND__` harness
+- `world.js` the height field, trails, splat-blended terrain, the lapping sea, the sky
+- `flora.js` procedural palms dressed in the licensed frond photos, trail bushes, Poly Haven ferns and calathea, grass, flowers, boulders, shells, driftwood, the jetty
+- `hall.js` the Keystone Hall from outside
+- `fauna.js` crabs, gulls, butterflies, fish, the turtle
+- `player.js` the automaton, its collision, and keyboard, touch and gamepad input
+- `fx.js` particles, footprints, motes, ripples, and the lens (bloom, tilt-shift, grade, flare)
+- `sound.js` surf, wind, gulls, footsteps, rustle, splash, all synthesised
+- `shaderlib.js` the shared shader patches: wind, push, rustle, cloud shadows, leaf light
+
+Touch devices get a lighter tier (fewer plants, smaller shadow map, no MSAA) and the
+renderer drops its pixel ratio once if the first seconds run under 40fps. The island adds
+about 6.4MB, loaded only on entry.
 
 ## What it is made of
 
@@ -72,8 +117,18 @@ node tools/shoot_scenes.mjs shots/DIR    # stills of every room, unsolved and so
 
 30/30 on desktop across four seeds and on mobile at last run.
 
+The island has its own capture tools, which drive it with real key presses and CDP touch:
+
+```bash
+node tools/_island_shot.mjs shots/DIR full   # trail, beach, wade, kick, jump, roll, door, gaze, sit, jetty
+MOBILE=1 node tools/_island_shot.mjs shots/DIR basic
+node tools/_island_flow.mjs shots/DIR        # title, solve, keystone, card, step outside, leave, return
+```
+
 ## Debug harness
 
 `window.__AMD__` exposes `state()`, `probe()` (client-space geometry for driving input),
 `goto(scene)`, `seed`, and, for captures only, `solve(scene)` and `setRing(i, seg)`.
-`?seed=N` pins the session, `?scene=pipes` starts in a room.
+`?seed=N` pins the session, `?scene=pipes` starts in a room, `?scene=island` goes straight
+outside. On the island, `window.__ISLAND__` exposes `state()`, `teleport(x, z, yaw)`,
+`press(action)` and `leave()`.

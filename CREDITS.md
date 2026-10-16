@@ -21,6 +21,24 @@ be re-licensed or re-sourced.
 | 84542950 | Dial Chamber, the mechanism's two support columns, their feet, the tie beam and the axle | Llight pole isolated. |
 | 316831733 | Dial Chamber, the bearing yoke at the top of each column | Gate valve isolated on white background.Manual valve. |
 
+## The island
+
+| Source | Used as | Licence |
+|---|---|---|
+| Adobe Stock 553490274, "Green leaf of palm tree on transparent background png file" | palm fronds, keyed and packed into `assets/island/fronds.webp` | Adobe Stock standard |
+| Adobe Stock 356037687, "Green leaves of palm tree isolated on white background" | the older, yellowing fronds in the same atlas | Adobe Stock standard |
+| Poly Haven `fern_02` | ferns along the trails | CC0 |
+| Poly Haven `calathea_orbifolia_01` | broadleaf undergrowth | CC0 |
+| Poly Haven `rock_07`, `rock_09` | boulders and tideline stones | CC0 |
+| Poly Haven `lambis_shell` | shells on the beaches | CC0 |
+| Poly Haven `aerial_beach_01`, `damp_beach_sand`, `leafy_grass`, `coast_sand_01`, `aerial_rocks_02` | the ground: dry sand, wet sand, grass, trails, rock | CC0 |
+| Poly Haven `seaworn_sandstone_brick`, `large_sandstone_blocks`, `roof_slates_02`, `brown_planks_09` | the hall's walls, plinth and roof; the doors, jetty and driftwood | CC0 |
+| RobotExpressive by Tomás Laulhé (Quaternius), modified by Don McCurdy | the automaton, re-skinned in brass and verdigris | CC0 |
+| three.js r185 | renderer, glTF loader, post-processing passes (vendored) | MIT, see `assets/island/vendor/LICENSE.three` |
+
+The palms, grass, flowers, crabs, gulls, butterflies, fish, turtle, the hall's architecture,
+the sea and the sky are built in code. Every island sound is synthesised.
+
 ## Drawn in code
 The pipe tiles, bellows, organ rank, balance beam, pans, bell weights, lamps, keys and
 every glyph are drawn in code (SVG and CSS). No third-party art.

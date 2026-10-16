@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#06060c">
 <meta name="description" content="Ah Mah Day Us. A mechanism island in four rooms: dials, organ pipes, a water clock, and the hall that makes them sing.">
 <title>Ah Mah Day Us</title>
+<script type="importmap">{"imports":{"three":"./assets/island/vendor/three.module.min.js"}}</script>
 <style>
 
   :root{
@@ -537,6 +538,11 @@
     color:#f6d9ad;background:rgba(20,14,8,.7);border:1px solid rgba(200,155,60,.7);
     border-radius:6px;padding:16px 22px;cursor:pointer;min-width:150px}
   #card button:hover{background:rgba(60,40,14,.8)}
+  /* the way out: the one thing on the card that is not a room */
+  #card .out{display:block;margin:-18px auto 34px;font-size:16px;letter-spacing:.3em;padding:18px 34px;
+    color:#fff0d4;border-color:rgba(242,184,128,.95);background:rgba(60,38,12,.72);
+    box-shadow:0 0 34px rgba(242,184,128,.35);animation:beckon 2.4s ease-in-out infinite}
+  #card .out:hover{background:rgba(110,72,24,.85);animation:none;opacity:1}
 </style>
 </head>
 <body>
@@ -636,6 +642,7 @@
   <div id="card"><div class="inner">
     <h2>THE MACHINE SINGS</h2>
     <p>the island is yours to wander</p>
+    <button class="out" id="stepOut">Step outside</button>
     <div class="go">
       <button data-go="dial">Dials</button><button data-go="pipes">Pipes</button>
       <button data-go="water">Water</button><button data-go="hall">Hall</button>
@@ -692,7 +699,7 @@ const $ = id => document.getElementById(id);
 const S = {
   scene:'dial', started:false, montage:false, frames:0,
   solved:{ dial:false, pipes:false, water:false }, done:false,
-  visited:{}, hall:{ progress:0 },
+  visited:{}, hall:{ progress:0 }, island:false,
 };
 const sceneEl = k => $('sc-' + k);
 
@@ -779,7 +786,7 @@ function mixBeds(){
   const t = AC.currentTime;
   for (const k of SCENES){
     beds[k].gain.cancelScheduledValues(t);
-    beds[k].gain.setTargetAtTime(k === S.scene ? (k === 'hall' ? .9 : .7) : 0, t, .25);
+    beds[k].gain.setTargetAtTime(k === S.scene && !S.island ? (k === 'hall' ? .9 : .7) : 0, t, .25);
   }
   if (organ) organ.g.gain.setTargetAtTime(organTarget(), t, .3);
 }
@@ -1520,12 +1527,12 @@ function navBind(id, fn){
 navBind('navLeft',  () => goto(SCENES[Math.max(0, SCENES.indexOf(S.scene) - 1)]));
 navBind('navRight', () => goto(SCENES[Math.min(3, SCENES.indexOf(S.scene) + 1)]));
 navBind('navHall',  () => goto('hall'));
-document.querySelectorAll('#card button').forEach(b => b.addEventListener('pointerdown', e => {
+document.querySelectorAll('#card .go button').forEach(b => b.addEventListener('pointerdown', e => {
   e.stopPropagation(); e.preventDefault();
   $('card').classList.remove('show'); goto(b.dataset.go);
 }));
 addEventListener('keydown', e => {
-  if (!S.started) return;
+  if (!S.started || S.island) return;
   if (e.key === 'ArrowLeft') goto(SCENES[Math.max(0, SCENES.indexOf(S.scene) - 1)]);
   if (e.key === 'ArrowRight') goto(SCENES[Math.min(3, SCENES.indexOf(S.scene) + 1)]);
 });
@@ -1559,6 +1566,47 @@ function endPointer(ev){
 stage.addEventListener('pointerup', endPointer);
 stage.addEventListener('pointercancel', endPointer);
 
+// ================================================================ the island
+// After the machine sings, the doors stay shut and the player steps out onto the island
+// itself. It is a separate Three.js scene in assets/island/, imported only on demand so
+// none of the four rooms pay for it.
+let islandRun = null;
+function islandOrgan(v){
+  if (!AC) return;
+  if (!organ) organOn();
+  if (organ) organ.g.gain.setTargetAtTime(v < 0 ? organTarget() : v, AC.currentTime, .5);
+}
+async function enterIsland(){
+  if (S.island) return;
+  S.island = true;
+  $('card').classList.remove('show');
+  hint(''); clearTimeout(bannerT); $('banner').classList.remove('show');
+  mixBeds();
+  const f = $('flash');
+  f.animate([{ opacity:0 }, { opacity:.9 }], { duration:900, easing:'ease-in', fill:'forwards' });
+  try {
+    const mod = await import('./assets/island/island.js');
+    islandRun = await mod.start({
+      ctx: AC, master,
+      music: { get gain(){ return musicGain ? musicGain.gain : null; } },
+      organ: islandOrgan,
+      onExit: leaveIsland,
+    });
+  } catch (err) {
+    console.error(err);
+    leaveIsland();
+  }
+  f.getAnimations().forEach(a => a.cancel());
+}
+function leaveIsland(){
+  islandRun = null;
+  S.island = false;
+  mixBeds();
+  islandOrgan(-1);
+  $('card').classList.add('show');
+}
+$('stepOut').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); enterIsland(); });
+
 // ================================================================ boot
 const titleEl = $('title');
 function begin(){
@@ -1568,6 +1616,7 @@ function begin(){
   startMusic();
   S.visited.dial = true;
   navRender();
+  if (qs.get('scene') === 'island'){ enterIsland(); return; }
   setTimeout(()=> S.scene === 'dial' && !S.solved.dial && hint(HINTS.dial), 1400);
 }
 titleEl.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); begin(); });
@@ -1628,7 +1677,8 @@ window.__AMD__ = {
         return { go:b.dataset.go, x:r.left + r.width/2, y:r.top + r.height/2 }; }),
     };
   },
-  begin, goto:k => goto(k, true),
+  begin, goto:k => goto(k, true), island: enterIsland,
+  get inIsland(){ return !!S.island; },
   // debug only
   setRing(i, seg){ const r=D.rings[i]; r.rot=norm(seg*STEP); applyRing(r); dialCheck(); },
   solve(k){
